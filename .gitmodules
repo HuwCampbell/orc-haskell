@@ -1,0 +1,12 @@
+[submodule "lib/viking"]
+	path = lib/viking
+	url = git@github.com:HuwCampbell/viking.git
+[submodule "lib/p"]
+	path = lib/p
+	url = git@github.com:HuwCampbell/p.git
+[submodule "lib/x"]
+	path = lib/x
+	url = git@github.com:HuwCampbell/x.git
+[submodule "lib/disorder.hs"]
+	path = lib/disorder.hs
+	url = git@github.com:HuwCampbell/disorder.hs.git

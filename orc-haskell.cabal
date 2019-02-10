@@ -1,0 +1,32 @@
+name:
+  orc-haskell
+version:
+  0.1.0.0
+synopsis:
+  Parser for the ORC file format
+homepage:
+  orc.huwcampbell.com
+license:
+  MIT
+license-file:
+  LICENSE
+author:
+  Huw Campbell
+maintainer:
+  huw.campbell@gmail.com
+category:
+  Codec
+build-type:
+  Simple
+extra-source-files:
+  ChangeLog.md
+cabal-version:
+  >=1.10
+
+library
+  -- exposed-modules:
+  -- other-modules:
+  -- other-extensions:
+  build-depends:       base >=4.11 && <4.12
+  hs-source-dirs:      src
+  default-language:    Haskell98
