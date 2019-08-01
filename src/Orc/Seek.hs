@@ -9,9 +9,11 @@ module Orc.Seek (
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Control (MonadTransControl (..))
+import           Control.Monad.Trans.State (StateT (..), runStateT)
 
 import qualified Data.Serialize.Get as Get
 
+import           Data.Word (Word32)
 import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
@@ -21,7 +23,8 @@ import           X.Control.Monad.Trans.Either (EitherT, newEitherT, left, hoistM
 import           Viking (Of (..), Stream)
 import qualified Viking.Stream as Viking
 
-import           Orc.Data.Striped (Column)
+import           Orc.Data.Data (StructField (..))
+import           Orc.Data.Striped (Column (..))
 import           Orc.Schema.Types as Orc
 import           Orc.Encodings.Bytes
 import           Orc.Encodings.Integers
@@ -154,13 +157,48 @@ readStripeMeta typeInfo handle stripeInfo = do
   return (stripeInfo, rowIndex, stripeFooter)
 
 
-decodeColumn :: MonadIO m => Type -> [Orc.Stream] -> EitherT String m Column
-decodeColumn typ streams =
-  case typ of
-    BOOLEAN ->
-      left ""
-    _ -> left ""
+
+decodeColumnTop :: MonadIO m => Type -> [Orc.Stream] -> ByteString -> EitherT String m Column
+decodeColumnTop types streams dataBytes =
+  fmap fst $ decodeNested types (0, streams, dataBytes)
+
+
+decodeNested :: MonadIO m => Type -> (Word32, [Orc.Stream], ByteString) -> EitherT String m (Column, (Word32, [Orc.Stream], ByteString))
+decodeNested types (ix, streams, dataBytes) =
+  case types of
+    STRUCT fields ->
+      case streams of
+        s:streams1 | streamColumn s == Just ix && streamKind s == Just SK_PRESENT -> do
+          presenceColumnLength <-
+            hoistMaybe "Need Column Length" $
+              streamLength s
+          let
+            (presenceBytes, remaining) =
+              ByteString.splitAt (fromIntegral presenceColumnLength) dataBytes
+
+          presenceColumn <-
+            hoistEither $
+              decodeBytes 0 presenceBytes
+
+          (structColumns, continuation) <-
+            rumbleStruct (ix + 1) fields streams1 remaining
+
+          pure
+            (Partial presenceColumn structColumns, continuation)
+
+        _ ->
+          rumbleStruct (ix + 1) fields streams dataBytes
+
+
+
 
 -- decodeDecimalColumn :: StripeInformation -> RowIndex -> StripeFooter -> ByteString -> Storable.Vector Word8
 -- decodeDecimalColumn stripeInformation rowIndex stripeFooter =
 --   decodeBytes (fromMaybe 0 $ siNumberOfRows stripeInformation)
+rumbleStruct :: MonadIO m => Word32 -> [StructField Type] -> [Orc.Stream] -> ByteString -> EitherT String m (Column, (Word32, [Orc.Stream], ByteString))
+rumbleStruct ix fields streams dataBytes =
+  flip runStateT (ix, streams, dataBytes) $
+    fmap Struct $
+      for fields $
+        traverse $
+          StateT . decodeNested

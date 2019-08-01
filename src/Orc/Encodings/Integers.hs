@@ -45,13 +45,16 @@ terminates firstByte =
 
 
 {-# INLINE decodeBase128Varint #-}
-decodeBase128Varint :: Word64 -> ByteString ->  Either String (Storable.Vector Word64)
-decodeBase128Varint len bytes =
+decodeBase128Varint :: ByteString ->  Either String (Storable.Vector Word64)
+decodeBase128Varint bytes =
   let
-    getter =
-      Storable.replicateM (fromIntegral len) getBase128Varint
+    many' :: (Storable.Storable a, Alternative f, Monad f) => f a -> f (Storable.Vector a)
+    many' from =
+      Storable.unfoldrM (\_ ->
+        ((\a -> Just (a, ())) <$> from) <|> pure Nothing
+      ) ()
   in
-    Get.runGet getter bytes
+    Get.runGet (many' getBase128Varint) bytes
 
 
 {-# INLINE getBase128Varint #-}
@@ -76,16 +79,16 @@ getBase128Varint =
 
 
 {-# INLINABLE decodeWord64 #-}
-decodeWord64 :: Word64 -> ByteString ->  Either String (Storable.Vector Word64)
+decodeWord64 :: ByteString ->  Either String (Storable.Vector Word64)
 decodeWord64 = decodeBase128Varint
 
 
 
 {-# INLINABLE decodeInt64 #-}
-decodeInt64 :: Word64 -> ByteString -> Either String (Storable.Vector Int64)
-decodeInt64 len bytes =
+decodeInt64 :: ByteString -> Either String (Storable.Vector Int64)
+decodeInt64 bytes =
   let
-    words = decodeWord64 len bytes
+    words = decodeWord64 bytes
   in
     fmap (Storable.map unZigZag64) words
 

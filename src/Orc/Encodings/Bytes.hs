@@ -57,13 +57,13 @@ foreign import ccall unsafe
 
 {-# INLINE decodeBytes #-}
 decodeBytes :: Word64 -> ByteString ->  Either String (Storable.Vector Word8)
-decodeBytes len bytes =
-    Get.runGet (getBytes len) bytes
+decodeBytes len =
+    Get.runGet (getBytes len)
 
 
 {-# INLINE getBytes #-}
 getBytes :: Word64 -> Get (Storable.Vector Word8)
-getBytes len =
+getBytes _len =
   let
     getSet :: Get (Storable.Vector Word8)
     getSet = do

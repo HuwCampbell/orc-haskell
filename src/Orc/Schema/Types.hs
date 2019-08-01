@@ -3,6 +3,7 @@
 
 module Orc.Schema.Types (
     Proto.CompressionKind (..)
+  , Proto.StreamKind (..)
 
   , PostScript (..)
   , readPostScript
