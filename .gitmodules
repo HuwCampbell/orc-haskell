@@ -10,3 +10,9 @@
 [submodule "lib/disorder.hs"]
 	path = lib/disorder.hs
 	url = git@github.com:HuwCampbell/disorder.hs.git
+[submodule "lib/anemone"]
+	path = lib/anemone
+	url = git@github.com:HuwCampbell/anemone.git
+[submodule "lib/snapper"]
+	path = lib/snapper
+	url = git@github.com:HuwCampbell/snapper.git
