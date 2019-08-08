@@ -26,6 +26,7 @@ cabal-version:
 library
   exposed-modules:
                        Orc.Data.Data
+                       Orc.Data.Segmented
                        Orc.Data.Striped
                        Orc.Encodings.Bytes
                        Orc.Encodings.Integers
@@ -99,3 +100,4 @@ test-suite test
                      , resourcet
                      , temporary-resourcet             == 0.1.*
                      , transformers
+                     , vector

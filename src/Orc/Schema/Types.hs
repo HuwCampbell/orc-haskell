@@ -4,6 +4,7 @@
 module Orc.Schema.Types (
     Proto.CompressionKind (..)
   , Proto.StreamKind (..)
+  , Proto.ColumnEncodingKind (..)
 
   , PostScript (..)
   , readPostScript
@@ -14,6 +15,7 @@ module Orc.Schema.Types (
   , StripeFooter (..)
   , readStripeFooter
   , StripeInformation (..)
+  , ColumnEncoding (..)
 
   , RowIndexEntry (..)
   , RowIndex (..)

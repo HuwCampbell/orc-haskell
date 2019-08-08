@@ -1,32 +1,56 @@
-{-# LANGUAGE BangPatterns   #-}
-{-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns             #-}
+{-# LANGUAGE NoImplicitPrelude        #-}
+{-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE PatternGuards            #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
+
 module Orc.Encodings.Integers (
     decodeWord64
   , decodeInt64
+
+  , decodeFloat32
+  , decodeFloat64
+
+  , decodeIntegerRLEv1
+  , decodeBase128Varint
+
+  , putBase128Varint
+  , putIntegerRLEv1
+
+  , getBase128Varint
+
+  , getIntegerRLEv2
+  , decodeIntegerRLEv2
 ) where
+
+import           Anemone.Foreign.Pack (unpack64, Packed64(..))
 
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
-import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR, bit, countLeadingZeros, xor)
+
+import           Data.Serialize.Put (Putter)
+import qualified Data.Serialize.Put as Put
+
+import qualified Data.Serialize.IEEE754 as Get
+import           Data.Bits (Bits, (.&.), (.|.), complement, shiftL, shiftR)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Internal as ByteString
-import           Data.Coerce (coerce)
-import           Data.Int (Int8, Int64)
+import           Data.Int (Int64)
 import           Data.Word (Word8, Word64)
 import           Data.String (String)
+import           Data.Ratio ((%))
 
 import qualified Data.Vector.Storable as Storable
-import qualified X.Data.Vector.Grow as Growable
 
-import           Foreign (mallocForeignPtrArray, withForeignPtr)
+import           Foreign (mallocForeignPtrArray, withForeignPtr, plusPtr)
 import           Foreign.Ptr (Ptr)
 
+import           Orc.Encodings.Primitives
+
+import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
-import           System.IO as IO
-
-
 
 import           P
 
@@ -34,34 +58,39 @@ import           P
 b10000000 :: Word8
 b10000000 = 0x80
 
-
 b01111111 :: Word8
 b01111111 = complement 0x80
 
-
-terminates :: Word8 -> Bool
-terminates firstByte =
-  (firstByte .&. b10000000) /= b10000000
-
+manyStorable :: (Storable.Storable a, Alternative f, Monad f) => f a -> f (Storable.Vector a)
+manyStorable from =
+  Storable.unfoldrM (\_ ->
+    ((\a -> Just (a, ())) <$> from) <|> pure Nothing
+  ) ()
 
 {-# INLINE decodeBase128Varint #-}
 decodeBase128Varint :: ByteString ->  Either String (Storable.Vector Word64)
 decodeBase128Varint bytes =
-  let
-    many' :: (Storable.Storable a, Alternative f, Monad f) => f a -> f (Storable.Vector a)
-    many' from =
-      Storable.unfoldrM (\_ ->
-        ((\a -> Just (a, ())) <$> from) <|> pure Nothing
-      ) ()
-  in
-    Get.runGet (many' getBase128Varint) bytes
+  Get.runGet (manyStorable getBase128Varint) bytes
+
+
+{-# INLINE decodeFloat32 #-}
+decodeFloat32 :: ByteString ->  Either String (Storable.Vector Float)
+decodeFloat32 bytes =
+  Get.runGet (manyStorable Get.getFloat32le) bytes
+
+
+{-# INLINE decodeFloat64 #-}
+decodeFloat64 :: ByteString ->  Either String (Storable.Vector Double)
+decodeFloat64 bytes =
+  Get.runGet (manyStorable Get.getFloat64le) bytes
+
 
 
 {-# INLINE getBase128Varint #-}
-getBase128Varint :: Get Word64
+getBase128Varint :: forall w. (Bits w, Num w) => Get w
 getBase128Varint =
   let
-    go :: Word64 -> Int -> Get Word64
+    go :: w -> Int -> Get w
     go !accumulator !shift = do
       byte <- Get.getWord8
       let
@@ -71,15 +100,40 @@ getBase128Varint =
         new =
           (fromIntegral masked `shiftL` shift) .|. accumulator
 
-      if terminates byte
+        terminates =
+          (byte .&. b10000000) /= b10000000
+
+      if terminates
         then return new
         else go new (7 + shift)
   in
     go 0 0
 
 
+{-# INLINE putBase128Varint #-}
+putBase128Varint :: Putter Word64
+putBase128Varint =
+  let
+    go chunk = do
+      let
+        masked =
+          fromIntegral chunk .&. b01111111
+
+        remainder =
+          chunk `shiftR` 7
+
+        terminates =
+          remainder == 0
+
+      if terminates
+        then Put.putWord8 masked
+        else Put.putWord8 (masked .|. b10000000) >> go remainder
+  in
+    go
+
+
 {-# INLINABLE decodeWord64 #-}
-decodeWord64 :: ByteString ->  Either String (Storable.Vector Word64)
+decodeWord64 :: ByteString -> Either String (Storable.Vector Word64)
 decodeWord64 = decodeBase128Varint
 
 
@@ -93,14 +147,207 @@ decodeInt64 bytes =
     fmap (Storable.map unZigZag64) words
 
 
+{-# INLINE decodeIntegerRLEv1 #-}
+decodeIntegerRLEv1 :: ByteString ->  Either String (Storable.Vector Word64)
+decodeIntegerRLEv1 bytes =
+  Get.runGet getIntegerRLEv1 bytes
 
-zigZag64 :: Int64 -> Word64
-zigZag64 !n =
-  fromIntegral $! (n `shiftL` 1) `xor` (n `shiftR` 63)
-{-# INLINE zigZag64 #-}
+
+{-# INLINE getIntegerRLEv1 #-}
+getIntegerRLEv1 :: Get (Storable.Vector Word64)
+getIntegerRLEv1 =
+  let
+    getSet :: Get (Storable.Vector Word64)
+    getSet = do
+      header <- Get.getWord8
+      if header < 128
+        then do
+          let
+            runLength = header + 3;
+
+          delta   <- Get.getInt8
+          initial <- getBase128Varint
+          return $
+            Storable.enumFromStepN initial (fromIntegral delta) (fromIntegral runLength)
+
+        else do
+          let
+            listLength = header .&. 0x7F;
+          Storable.replicateM (fromIntegral listLength) getBase128Varint
+
+  in
+    Storable.concat <$>
+      many getSet
 
 
-unZigZag64 :: Word64 -> Int64
-unZigZag64 !n =
-  fromIntegral $! (n `shiftR` 1) `xor` negate (n .&. 0x1)
-{-# INLINE unZigZag64 #-}
+
+putIntegerRLEv1 :: Putter (Storable.Vector Word64)
+putIntegerRLEv1 =
+  let
+    toRuns :: Storable.Vector Word64 -> [(Word64, Word8)]
+    toRuns =
+      let
+        collect x ((y, n):xs0)
+          | x == y
+          , n < 130
+          = ((y, n + 1):xs0)
+        collect x xs
+          = (x, 1) : xs
+      in
+        Storable.foldr collect []
+
+
+    takeLiterals :: [(Word64, Word8)] -> ([(Word64, Word8)], [(Word64, Word8)])
+    takeLiterals =
+      let
+        go :: Word8 -> [(Word64, Word8)] -> ([(Word64, Word8)], [(Word64, Word8)])
+        go n rest
+          | (x, i) : xs <- rest
+          , i < 3
+          , n + i < 128
+          = let (r, rs) = go (n + i) xs
+            in  ((x,i):r, rs)
+          | otherwise
+          = ([], rest)
+
+      in go 0
+
+    putSet :: Putter (Storable.Vector Word64)
+    putSet words =
+      let
+        runs = toRuns words
+
+        place []
+          = pure ()
+        place ws@((w, n):ws0)
+          | n >= 3
+          = do Put.putWord8 (n - 3)
+               Put.putWord8 0
+               putBase128Varint w
+               place ws0
+
+          | otherwise
+          = let
+              (noRuns, runStart) =
+                takeLiterals ws
+
+              totalLen =
+                sum $ snd <$> noRuns
+
+              header =
+                totalLen .|. b10000000
+
+            in do Put.putWord8 header
+                  for_ noRuns $
+                    \(v,i) ->
+                      for_ [1.. i] $
+                        const (putBase128Varint v)
+
+                  place runStart
+
+      in
+        place runs
+  in
+    putSet
+
+
+
+{-# INLINE decodeIntegerRLEv2 #-}
+decodeIntegerRLEv2 :: ByteString ->  Either String (Storable.Vector Word64)
+decodeIntegerRLEv2 =
+  Get.runGet getIntegerRLEv2
+
+
+{-# INLINE getIntegerRLEv2 #-}
+getIntegerRLEv2 :: Get (Storable.Vector Word64)
+getIntegerRLEv2 =
+  let
+    ensureEmpty =
+      Get.isEmpty >>= \case
+        True -> return []
+        False -> mzero
+
+    consumeMany a =
+      ensureEmpty <|> consumeSome a
+
+    consumeSome a =
+      (:) <$> a <*> consumeMany a
+
+
+    -- | Read a Word16 in big endian format
+    getWordBe :: Word8 -> Get Word64
+    getWordBe =
+      let
+        go :: Word64 -> Word8 -> Get Word64
+        go acc n
+          | n <= 0
+          = return acc
+          | otherwise
+          = do next <- fromIntegral <$> Get.getWord8
+               go ((acc `shiftL` 8) .|. next) (n - 1)
+      in
+        go 0 . fromIntegral
+
+    getSet :: Get (Storable.Vector Word64)
+    getSet = do
+      opening  <- Get.lookAhead Get.getWord8
+      case opening `shiftR` 6 of
+        --
+        -- Short Repeat
+        0 -> do
+          header <- Get.getWord8
+          let
+            width =
+              (header `shiftR` 3) + 1
+            repeats =
+              (header .&. 0x07) + 3
+          value <- getWordBe width
+          return $
+            Storable.replicate (fromIntegral repeats) value
+        --
+        -- Direct
+        1 -> do
+          header <- Get.getWord16be
+          let
+            width =
+              fromIntegral $
+                ((opening .&. 0x3E) `shiftR` 1) + 1
+
+            repeats =
+              fromIntegral $
+                (header .&. 0x01FF) + 1
+
+            required =
+              repeats * width
+
+          dataBytes <- Get.getByteString (ceiling (required % 8))
+
+          return $
+            readLongsNative dataBytes repeats width
+
+        _ -> fail $ "Fuck it " <> show (opening `shiftR` 6)
+  in
+    Storable.concat <$>
+      consumeMany getSet
+
+
+{-# INLINE readLongsNative #-}
+readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64
+readLongsNative bytes len bitsize =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        ByteString.toForeignPtr bytes
+
+    outPtr <- mallocForeignPtrArray (fromIntegral len)
+
+    withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        readLongs (plusPtr inPtr' offset) len bitsize outPtr'
+
+    return $
+      Storable.unsafeFromForeignPtr outPtr 0 (fromIntegral len)
+
+foreign import ccall unsafe
+  readLongs
+    :: Ptr Word8 -> Word64 -> Word64 -> Ptr Word64 -> IO ()

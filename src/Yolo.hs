@@ -6,10 +6,19 @@
 
 module Yolo where
 
+import System.IO
 import System.IO.Unsafe
+
+import Text.Show.Pretty
 
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Resource
+
+
+
+
+yoloPrint :: (Show a, Yolo f) => f a -> IO ()
+yoloPrint = putStr . ppShow . yolo
 
 
 class Yolo f where

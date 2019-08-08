@@ -4,9 +4,12 @@ module Orc.Data.Striped (
 
 import           P
 
-import           Data.Word (Word8)
+import           Data.ByteString (ByteString)
+import           Data.Word (Word8, Word64)
 
 import           Orc.Data.Data
+import           Orc.Data.Segmented
+import           Orc.Schema.Types (Type, ColumnEncodingKind)
 
 import           X.Data.Vector.Cons (Cons)
 import qualified X.Data.Vector as Boxed
@@ -21,5 +24,19 @@ data Column
 
   | Bool !(Storable.Vector Word8)
   | Bytes !(Storable.Vector Word8)
-  | Integer !(Storable.Vector Int64)
-  deriving (Eq, Ord, Show)
+
+  | Short !(Storable.Vector Int16)
+  | Integer !(Storable.Vector Int32)
+  | Long !(Storable.Vector Int64)
+
+  | Decimal !(Storable.Vector Word64) !(Storable.Vector Word64)
+
+  | Float !(Storable.Vector Float)
+  | Double !(Storable.Vector Double)
+
+  | String !(Segmented ByteString)
+  | Char !(Segmented ByteString)
+  | VarChar !(Segmented ByteString)
+
+  | UnhandleColumn Type ColumnEncodingKind
+  deriving (Eq, Show)

@@ -50,17 +50,107 @@ void read_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* output
   }
 }
 
+
+uint64_t readLongs(const uint8_t *data_input, uint64_t len, uint64_t bitSize, uint64_t *data_output) {
+  uint64_t ret = 0;
+  uint64_t curByte = 0;
+  uint64_t bitsLeft = 0;
+
+  // TODO: unroll to improve performance
+  for(uint64_t i = 0; i < len; i++) {
+    uint64_t result = 0;
+    uint64_t bitsLeftToRead = bitSize;
+    while (bitsLeftToRead > bitsLeft) {
+      result <<= bitsLeft;
+      result |= curByte & ((1 << bitsLeft) - 1);
+      bitsLeftToRead -= bitsLeft;
+      curByte = *(data_input++);
+      bitsLeft = 8;
+    }
+
+    // handle the left over bits
+    if (bitsLeftToRead > 0) {
+      result <<= bitsLeftToRead;
+      bitsLeft -= (uint32_t)(bitsLeftToRead);
+      result |= (curByte >> bitsLeft) & ((1 << bitsLeftToRead) - 1);
+    }
+    data_output[i] = result;
+    ++ret;
+  }
+
+  return ret;
+}
+
 // void write_bytes_rle(const uint64_t length, const int8_t* input, int8_t* output) {
 //   uint64_t written = 0;
 //   int8_t potential_run_start = input;
 //   int8_t potential_run_end = input;
 //   int8_t potential_run = *input;
-
 //   while (written < length) {
 //     int8_t header = *input;
 //     input++;
-
-    
-
 //   }
 // }
+
+// Map bit length i to closest aligned fixed bit width that can contain i bits.
+// const uint8_t ClosestAlignedFixedBitsMap[65] = {
+//     1, 1, 2, 4, 4, 8, 8, 8, 8, 16, 16, 16, 16, 16, 16, 16, 16, 24, 24, 24, 24, 24, 24, 24, 24,
+//     32, 32, 32, 32, 32, 32, 32, 32,
+//     40, 40, 40, 40, 40, 40, 40, 40,
+//     48, 48, 48, 48, 48, 48, 48, 48,
+//     56, 56, 56, 56, 56, 56, 56, 56,
+//     64, 64, 64, 64, 64, 64, 64, 64
+// };
+
+// inline uint32_t getClosestAlignedFixedBits(uint32_t n) {
+//   if (n <= 64) {
+//     return ClosestAlignedFixedBitsMap[n];
+//   } else {
+//     return 64;
+//   }
+// }
+
+// void writeInts(int64_t* input, uint32_t offset, size_t len, uint32_t bitSize) {
+//   if(len < 1 || bitSize < 1) {
+//       return;
+//   }
+
+//   if (getClosestAlignedFixedBits(bitSize) == bitSize) {
+//     uint32_t numBytes;
+//     uint32_t endOffSet = (uint32_t) (offset + len);
+//     if (bitSize < 8 ) {;
+//       char bitMask = (char)((1 << bitSize) - 1);
+//       uint32_t numHops = 8 / bitSize;
+//       uint32_t remainder = (uint32_t)(len % numHops);
+//       uint32_t endUnroll = endOffSet - remainder;
+//       for (uint32_t i = offset; i < endUnroll; i+=numHops) {
+//         char toWrite = 0;
+//         for (uint32_t j = 0; j < numHops; ++j) {
+//           toWrite |= (char)((input[i+j] & bitMask) << (8 - (j + 1) * bitSize));
+//         }
+//         writeByte(toWrite);
+//       }
+
+//       if (remainder > 0) {
+//         uint32_t startShift = 8 - bitSize;
+//         char toWrite = 0;
+//         for (uint32_t i = endUnroll; i < endOffSet; ++i) {
+//           toWrite |= (char)((input[i] & bitMask) << startShift);
+//           startShift -= bitSize;
+//         }
+//         writeByte(toWrite);
+//       }
+
+//     } else {
+//       numBytes = bitSize / 8;
+
+//       for (uint32_t i = offset; i < endOffSet; ++i) {
+//         for (uint32_t j = 0; j < numBytes; ++j) {
+//           char toWrite = (char)((input[i] >> (8 * (numBytes - j - 1))) & 255);
+//           writeByte(toWrite);
+//         }
+//       }
+//     }
+
+//     return;
+//   }

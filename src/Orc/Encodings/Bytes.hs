@@ -6,16 +6,15 @@
 module Orc.Encodings.Bytes (
     decodeBytes
   , decodeBits
+
+  -- For Benchmarking
+  , decodeBytesNative
 ) where
 
--- import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR, bit, countLeadingZeros, xor)
-
-import           Data.Bits ((.&.), finiteBitSize, testBit)
+import           Data.Bits ((.&.), testBit)
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Internal as ByteString
-import           Data.Coerce (coerce)
-import           Data.Int (Int8, Int64)
+import           Data.Int (Int64)
 import           Data.Word (Word8, Word64)
 import           Data.Ratio ((%))
 import           Data.Serialize.Get (Get)
@@ -23,9 +22,8 @@ import qualified Data.Serialize.Get as Get
 import           Data.String (String)
 
 import qualified Data.Vector.Storable as Storable
-import qualified X.Data.Vector.Grow as Growable
 
-import           Foreign (mallocForeignPtrArray, withForeignPtr)
+import           Foreign (withForeignPtr)
 import           Foreign.Ptr (Ptr)
 
 import           System.IO.Unsafe (unsafePerformIO)
@@ -33,9 +31,9 @@ import           System.IO as IO
 
 import           P
 
-{-# INLINE decodeBytes_native #-}
-decodeBytes_native :: Word64 -> ByteString -> Storable.Vector Word8
-decodeBytes_native len bytes =
+{-# INLINE decodeBytesNative #-}
+decodeBytesNative :: Word64 -> ByteString -> Storable.Vector Word8
+decodeBytesNative len bytes =
   unsafePerformIO $ do
     let
       (inPtr, offset, _inLen) =
@@ -56,14 +54,14 @@ foreign import ccall unsafe
 
 
 {-# INLINE decodeBytes #-}
-decodeBytes :: Word64 -> ByteString ->  Either String (Storable.Vector Word8)
-decodeBytes len =
-    Get.runGet (getBytes len)
+decodeBytes :: ByteString ->  Either String (Storable.Vector Word8)
+decodeBytes =
+    Get.runGet getBytes
 
 
 {-# INLINE getBytes #-}
-getBytes :: Word64 -> Get (Storable.Vector Word8)
-getBytes _len =
+getBytes :: Get (Storable.Vector Word8)
+getBytes =
   let
     getSet :: Get (Storable.Vector Word8)
     getSet = do
@@ -72,10 +70,7 @@ getBytes _len =
         then do
           let
             runLength = header + 3;
-          value <- Get.getWord8
-
-          return $
-            Storable.replicate (fromIntegral runLength) value
+          Storable.replicate (fromIntegral runLength) <$> Get.getWord8
         else do
           let
             listLength = header .&. 0x7F;
@@ -88,12 +83,12 @@ getBytes _len =
 
 {-# INLINE decodeBits #-}
 decodeBits :: Word64 -> ByteString -> Either String (Storable.Vector Bool)
-decodeBits bitLen bytes =
+decodeBits _bitLen bytes =
   let
-    fitting = ceiling (bitLen % 8)
+    -- fitting = ceiling (bitLen % 8)
 
     decodedByteString =
-      decodeBytes fitting bytes
+      decodeBytes bytes
 
     finiteBits w =
       Storable.map (testBit w) (Storable.enumFromN 0 8)
