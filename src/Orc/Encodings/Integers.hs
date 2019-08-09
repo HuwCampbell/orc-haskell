@@ -26,6 +26,9 @@ module Orc.Encodings.Integers (
 
 import           Anemone.Foreign.Pack (unpack64, Packed64(..))
 
+import           Control.Monad.ST (ST, runST)
+import qualified Data.STRef as ST
+
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 
@@ -43,6 +46,7 @@ import           Data.String (String)
 import           Data.Ratio ((%))
 
 import qualified Data.Vector.Storable as Storable
+import qualified Data.Vector.Storable.Mutable as Mutable
 
 import           Foreign (mallocForeignPtrArray, withForeignPtr, plusPtr)
 import           Foreign.Ptr (Ptr)
@@ -273,63 +277,174 @@ getIntegerRLEv2 =
     consumeSome a =
       (:) <$> a <*> consumeMany a
 
-
-    -- | Read a Word16 in big endian format
-    getWordBe :: Word8 -> Get Word64
-    getWordBe =
-      let
-        go :: Word64 -> Word8 -> Get Word64
-        go acc n
-          | n <= 0
-          = return acc
-          | otherwise
-          = do next <- fromIntegral <$> Get.getWord8
-               go ((acc `shiftL` 8) .|. next) (n - 1)
-      in
-        go 0 . fromIntegral
-
     getSet :: Get (Storable.Vector Word64)
     getSet = do
       opening  <- Get.lookAhead Get.getWord8
       case opening `shiftR` 6 of
-        --
-        -- Short Repeat
-        0 -> do
-          header <- Get.getWord8
-          let
-            width =
-              (header `shiftR` 3) + 1
-            repeats =
-              (header .&. 0x07) + 3
-          value <- getWordBe width
-          return $
-            Storable.replicate (fromIntegral repeats) value
-        --
-        -- Direct
-        1 -> do
-          header <- Get.getWord16be
-          let
-            width =
-              fromIntegral $
-                ((opening .&. 0x3E) `shiftR` 1) + 1
+        0 ->
+          getShortRepeat
 
-            repeats =
-              fromIntegral $
-                (header .&. 0x01FF) + 1
+        1 ->
+          getDirect
 
-            required =
-              repeats * width
+        2 ->
+          getPatchedBase
 
-          dataBytes <- Get.getByteString (ceiling (required % 8))
-
-          return $
-            readLongsNative dataBytes repeats width
+        3 ->
+          getDelta
 
         _ -> fail $ "Fuck it " <> show (opening `shiftR` 6)
   in
     Storable.concat <$>
       consumeMany getSet
 
+
+{-# INLINE getShortRepeat #-}
+getShortRepeat :: Get (Storable.Vector Word64)
+getShortRepeat = do
+  header <- Get.getWord8
+  let
+    width =
+      (header `shiftR` 3) + 1
+    repeats =
+      (header .&. 0x07) + 3
+  value <- getWordBe width
+  return $
+    Storable.replicate (fromIntegral repeats) value
+
+
+{-# INLINE getDirect #-}
+getDirect :: Get (Storable.Vector Word64)
+getDirect = do
+  header <- Get.getWord16be
+  let
+    width =
+      bitSizeLookup $
+        fromIntegral $
+          (header .&. 0x3E00) `shiftR` 9
+
+    repeats =
+      fromIntegral $
+        (header .&. 0x01FF) + 1
+
+    required =
+      repeats * width
+
+  dataBytes <- Get.getByteString (ceiling (required % 8))
+
+  return $
+    readLongsNative dataBytes repeats width
+
+
+{-# INLINE getPatchedBase #-}
+getPatchedBase :: Get (Storable.Vector Word64)
+getPatchedBase = do
+  header <- Get.getWord32be
+  let
+    width =
+      bitSizeLookup $
+        fromIntegral $
+          (header .&. 0x3E000000) `shiftR` 25
+
+    repeats =
+      fromIntegral $
+        ((header .&. 0x01FF0000) `shiftR` 16) + 1
+
+    baseWidth =
+      fromIntegral $
+        ((header .&. 0x000E000) `shiftR` 13) + 1
+
+    patchWidth =
+      bitSizeLookup $
+        fromIntegral $
+          (header .&. 0x0001F00) `shiftR` 8
+
+    patchGapWidth =
+      fromIntegral $
+        ((header .&. 0x00000E0) `shiftR` 5) + 1
+
+    patchListLength =
+      fromIntegral $
+        header .&. 0x000001F
+
+  baseValue <-
+    getWordBe $ fromIntegral baseWidth
+
+  dataBytes <-
+    Get.getByteString (ceiling ((repeats * width) % 8))
+
+  patchBytes <-
+    Get.getByteString (ceiling ((patchListLength * (patchWidth + patchGapWidth)) % 8))
+
+  let
+    unadjustedValues =
+      readLongsNative dataBytes repeats width
+
+    patchGapsAndValues =
+      readLongsNative patchBytes patchListLength (patchWidth + patchGapWidth)
+
+    patchedValues =
+      runST $ do
+        working <- Storable.unsafeThaw unadjustedValues
+        index   <- ST.newSTRef 0
+        Storable.forM_ patchGapsAndValues $ \patch -> do
+          let
+            gap
+              = patch `shiftR` fromIntegral patchWidth
+
+            restGap =
+              fromIntegral $
+                64 - patchWidth
+
+            diff
+              = ((patch `shiftL` restGap) `shiftR` restGap) `shiftL` fromIntegral width
+
+          ST.modifySTRef index (+ (fromIntegral gap))
+          Mutable.modify working (.|. diff) =<< ST.readSTRef index
+        Storable.unsafeFreeze working
+
+    adjustedValue =
+      Storable.map (+ baseValue) patchedValues
+
+  return
+    adjustedValue
+
+
+{-# INLINE getDelta #-}
+getDelta :: Get (Storable.Vector Word64)
+getDelta = do
+  header <- Get.getWord16be
+  let
+    width =
+      bitSizeLookup $
+        fromIntegral $
+          (header .&. 0x3E00) `shiftR` 9
+
+    repeats =
+      fromIntegral $
+        (header .&. 0x01FF) + 1
+
+    deltaRepeats =
+      repeats - 2
+
+    required =
+      deltaRepeats * width
+
+  baseValue <-
+    getBase128Varint
+
+  deltaBase <-
+    fromIntegral . unZigZag64 <$> getBase128Varint
+
+  deltaBytes <-
+    Get.getByteString (ceiling (required % 8))
+
+  let
+    deltas =
+      readLongsNative deltaBytes deltaRepeats width
+
+  return $
+    Storable.scanl' (+) baseValue (Storable.singleton deltaBase <> deltas)
 
 {-# INLINE readLongsNative #-}
 readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64
@@ -351,3 +466,16 @@ readLongsNative bytes len bitsize =
 foreign import ccall unsafe
   readLongs
     :: Ptr Word8 -> Word64 -> Word64 -> Ptr Word64 -> IO ()
+
+
+bitSizeLookup :: Int -> Word64
+bitSizeLookup =
+  let
+    table =
+      Storable.fromList [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        26, 28, 30, 32, 40, 48, 56, 64
+      ]
+  in
+    \key ->
+      table Storable.! fromIntegral key
