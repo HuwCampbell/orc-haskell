@@ -4,14 +4,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Test.Orc.Streams.Integer where
 
-import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 import qualified Data.Serialize.Put as Put
 import qualified Data.ByteString as Strict
-import           Data.Functor.Identity (runIdentity)
 
 import qualified Data.Vector.Storable as Storable
-
+import           Data.Word (Word64)
 
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -22,7 +20,6 @@ import           P
 import           System.IO (IO)
 
 import           Orc.Encodings.Integers
-
 
 
 prop_roundTripBase128Varint :: Property
@@ -45,6 +42,51 @@ prop_roundTripIntegerRLEv1 =
           (Gen.word64 (Range.linearFrom 0 0 maxBound))
 
     tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
+
+
+prop_roundTripIntegerRLEv1_int64 :: Property
+prop_roundTripIntegerRLEv1_int64 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.int64 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
+
+
+prop_spec_repeat_IntegerRLEv1 :: Property
+prop_spec_repeat_IntegerRLEv1 =
+  withTests 1 . property $ do
+    let
+      shortRepeatExampleInput =
+        Strict.pack [0x61, 0x00, 0x07]
+
+      shortRepeatExpected =
+        Storable.replicate 100 (7 :: Word64)
+
+      shortRepeatOutput =
+        Get.runGet getIntegerRLEv1 shortRepeatExampleInput
+
+    shortRepeatOutput === Right shortRepeatExpected
+
+
+
+prop_spec_put_repeat_IntegerRLEv1 :: Property
+prop_spec_put_repeat_IntegerRLEv1 =
+  withTests 1 . property $ do
+    let
+      shortRepeatExampleInput =
+        Strict.pack [0x61, 0x00, 0x07]
+
+      shortRepeatExpected =
+        Storable.replicate 100 (7 :: Word64)
+
+      shortRepeatOutput =
+        Put.runPut (putIntegerRLEv1 shortRepeatExpected)
+
+    shortRepeatOutput === shortRepeatExampleInput
 
 
 prop_spec_short_repeat_IntegerRLEv2 :: Property
@@ -113,6 +155,7 @@ prop_spec_delta_IntegerRLEv2 =
         Get.runGet getIntegerRLEv2 deltaExampleInput
 
     deltaOutput === Right deltaExpected
+
 
 tests :: IO Bool
 tests =

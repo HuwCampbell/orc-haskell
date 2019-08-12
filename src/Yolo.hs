@@ -1,9 +1,6 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE UndecidableInstances   #-}
-{-# LANGUAGE OverlappingInstances   #-}
-
-
 module Yolo where
 
 import System.IO
@@ -15,8 +12,6 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Resource
 
 
-
-
 yoloPrint :: (Show a, Yolo f) => f a -> IO ()
 yoloPrint = putStr . ppShow . yolo
 
@@ -26,12 +21,13 @@ class Yolo f where
 
 instance Yolo Maybe where
   yolo (Just x) = x
-  yolo Nothing = error "Yolo!... You got nothing"
+  yolo Nothing = error "Yolo!... Nothing"
 
 instance Yolo (Either a) where
   yolo (Right x) = x
+  yolo (Left _) = error "Yolo!... Left"
 
-instance Yolo (Either String) where
+instance {-# OVERLAPPING #-} Yolo (Either String) where
   yolo (Right x) = x
   yolo (Left x) = error x
 
@@ -44,7 +40,7 @@ instance Yolo IO where
 instance Yolo m => Yolo (ExceptT e m) where
   yolo = yolo . yolo . runExceptT
 
-instance Yolo m => Yolo (ExceptT String m) where
+instance {-# OVERLAPPING #-} Yolo m => Yolo (ExceptT String m) where
   yolo = yolo . yolo . runExceptT
 
 instance (Yolo m, MonadBaseControl IO m) => Yolo (ResourceT m) where

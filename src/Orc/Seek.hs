@@ -9,19 +9,21 @@ module Orc.Seek (
 ) where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
-import           Control.Monad.Trans.State (StateT (..), evalStateT, get, put, modify')
+import           Control.Monad.Except (MonadError, liftEither, throwError)
+import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, modify')
+import           Control.Monad.Reader (ReaderT (..), runReaderT)
 
 import qualified Data.Serialize.Get as Get
 
+import           Data.Word (Word64)
 import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
-import           X.Control.Monad.Trans.Either (EitherT, newEitherT, left, hoistMaybe, hoistEither)
+import           X.Control.Monad.Trans.Either (EitherT, newEitherT, left)
 
 import           Viking (Of (..), Stream)
 import qualified Viking.Stream as Viking
@@ -33,9 +35,10 @@ import           Orc.Schema.Types as Orc
 import           Orc.Encodings.Bytes
 import           Orc.Encodings.Integers
 
+import           System.IO as IO
+
 import           P
 
-import           System.IO as IO
 
 withFileLifted
   :: (Monad (t IO), MonadTransControl t)
@@ -79,7 +82,7 @@ bashFile file =
           types footer
 
       fmap Viking.each $
-        for stripeInfos $ readStripe typeInfo handle
+        for stripeInfos $ readStripe typeInfo (compression postScript) handle
 
 
 -- | Checks that the magic values are present in the file
@@ -116,7 +119,7 @@ checkMagic handle = do
   liftIO $ hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength + fromIntegral footerLen)
   footerData <- newEitherT $ readCompressedStream compressionInfo <$> liftIO (ByteString.hGet handle $ fromIntegral footerLen)
 
-  footer <- hoistEither $ readFooter footerData
+  footer <- liftEither $ readFooter footerData
 
   liftIO  $ hSeek handle AbsoluteSeek 3
 
@@ -132,8 +135,8 @@ readCompressedStream = \case
   _ -> const (Left "Unsupported Compression Kind")
 
 
-readStripe :: MonadIO m => Type -> Handle -> StripeInformation -> EitherT String m (StripeInformation, RowIndex, StripeFooter, Column)
-readStripe typeInfo handle stripeInfo = do
+readStripe :: MonadIO m => Type -> Maybe CompressionKind -> Handle -> StripeInformation -> EitherT String m (StripeInformation, RowIndex, StripeFooter, Column)
+readStripe typeInfo mCompressionInfo handle stripeInfo = do
 
   --
   -- Set the Handle to the start of the
@@ -146,15 +149,15 @@ readStripe typeInfo handle stripeInfo = do
         fromIntegral
 
   riLength <-
-    hoistMaybe "Required Field Missing"
+    liftMaybe "Required Field Missing"
       (indexLength stripeInfo)
 
   rdLength <-
-    hoistMaybe "Required Field Missing"
+    liftMaybe "Required Field Missing"
       (dataLength stripeInfo)
 
   rsLength <-
-    hoistMaybe "Required Field Missing"
+    liftMaybe "Required Field Missing"
       (siFooterLength stripeInfo)
 
   rowIndex <-
@@ -175,17 +178,17 @@ readStripe typeInfo handle stripeInfo = do
       columns stripeFooter
 
   column <-
-    decodeColumnTop typeInfo columnsEncodings nonRowIndexStreams dataBytes
+    decodeColumnTop typeInfo mCompressionInfo columnsEncodings nonRowIndexStreams dataBytes
 
   return (stripeInfo, rowIndex, stripeFooter, column)
 
 
-decodeColumnTop :: MonadIO m => Type -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteString -> EitherT String m Column
-decodeColumnTop types encodings streams dataBytes =
-  evalStateT (decodeColumn types) (makeIndexed encodings, streams, dataBytes)
+decodeColumnTop :: MonadIO m => Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteString -> EitherT String m Column
+decodeColumnTop types mCompression encodings streams dataBytes =
+  evalStateT (runReaderT (decodeColumn types) mCompression) (makeIndexed encodings, streams, dataBytes)
 
 
-type OrcDecode m = StateT (Indexed Orc.ColumnEncoding, [Orc.Stream], ByteString) (EitherT String m)
+type OrcDecode m = ReaderT (Maybe CompressionKind) (StateT (Indexed Orc.ColumnEncoding, [Orc.Stream], ByteString) (EitherT String m))
 
 
 withPresence :: Monad m => OrcDecode m (Column -> Column)
@@ -198,9 +201,8 @@ withPresence = do
         popStream
 
       presenceColumn <-
-        lift $
-          hoistEither $
-            decodeBytes presenceBytes
+        liftEither $
+          decodeBytes presenceBytes
 
       return $ Partial presenceColumn
     _ -> return id
@@ -212,17 +214,16 @@ popStream = do
   case streams of
     s:rest -> do
       colLength <-
-        lift $
-          hoistMaybe "Need Column Length" $
-            streamLength s
+        liftMaybe "Need Column Length" $
+          streamLength s
       let
         (theseBytes, remainingBytes) =
           ByteString.splitAt (fromIntegral colLength) bytes
 
       put (ix, rest, remainingBytes)
-      return (s, theseBytes)
+      return $! (s, theseBytes)
 
-    _ -> lift $ left "No data to pop"
+    _ -> throwError "No data to pop"
 
 
 incrementColumn :: Monad m => OrcDecode m ()
@@ -238,9 +239,8 @@ decodeColumn types =
 currentEncoding :: Monad m => OrcDecode m (Orc.ColumnEncoding)
 currentEncoding = do
   (ix, _, _) <- get
-  lift $
-    hoistMaybe "Encodings Exhausted"
-      (currentValue ix)
+  liftMaybe "Encodings Exhausted"
+    (currentValue ix)
 
 
 -- | Read A Column, Present Column has already been handled.
@@ -250,9 +250,8 @@ decodeColumnPart types = do
     columnEncodingKind <$> currentEncoding
 
   encodingKind <-
-    lift $
-      hoistMaybe "Encoding Kinds required"
-        mEncodingKind
+    liftMaybe "Encoding Kinds required"
+      mEncodingKind
 
   case (types, encodingKind) of
     (BOOLEAN, _) -> do
@@ -260,8 +259,7 @@ decodeColumnPart types = do
         popStream
 
       le'column <-
-        lift $
-          hoistEither $
+        liftEither $
             decodeBytes presenceBytes
 
       return $
@@ -270,41 +268,41 @@ decodeColumnPart types = do
 
     (BYTE, _) -> do
       (_, dataBytes) <- popStream
-      bytes          <- lift $ hoistEither (decodeBytes dataBytes)
+      bytes          <- liftEither (decodeBytes dataBytes)
       return $ Bytes bytes
 
     (SHORT, DIRECT) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> lift (hoistEither (decodeIntegerRLEv1 dataBytes))
+      Integer <$> liftEither (decodeIntegerRLEv1 dataBytes)
 
     (INT, DIRECT) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> lift (hoistEither (decodeIntegerRLEv1 dataBytes))
+      Integer <$> liftEither (decodeIntegerRLEv1 dataBytes)
 
     (LONG, DIRECT) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> lift (hoistEither (decodeIntegerRLEv1 dataBytes))
+      Integer <$> liftEither (decodeIntegerRLEv1 dataBytes)
 
     (SHORT, DIRECT_V2) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> lift (hoistEither (decodeIntegerRLEv2 dataBytes))
+      Integer . Storable.map fromIntegral <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (INT, DIRECT_V2) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> lift (hoistEither (decodeIntegerRLEv2 dataBytes))
+      Integer . Storable.map fromIntegral <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (LONG, DIRECT_V2) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> lift (hoistEither (decodeIntegerRLEv2 dataBytes))
+      Integer . Storable.map fromIntegral <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (FLOAT, _) -> do
       (_, dataBytes) <- popStream
-      floats <- lift $ hoistEither (decodeFloat32 dataBytes)
+      floats <- liftEither (decodeFloat32 dataBytes)
       return $ Float floats
 
     (DOUBLE, _) -> do
       (_, dataBytes) <- popStream
-      doubles <- lift $ hoistEither (decodeFloat64 dataBytes)
+      doubles <- liftEither (decodeFloat64 dataBytes)
       return $ Double doubles
 
     (STRING, encoding) ->
@@ -323,13 +321,13 @@ decodeColumnPart types = do
     (DECIMAL, enc) -> do
       (_, dataBytes)  <- popStream
       (_, scaleBytes) <- popStream
-      words           <- lift $ hoistEither (decodeWord64 dataBytes)
+      words           <- liftEither (decodeBase128Varint dataBytes)
       scale           <-
         case enc of
           DIRECT ->
-            lift (hoistEither (decodeIntegerRLEv1 scaleBytes))
-          DIRECT_V2 ->
-            lift (hoistEither (decodeIntegerRLEv2 scaleBytes))
+            liftEither (decodeIntegerRLEv1 scaleBytes)
+          _ ->
+            liftEither (decodeIntegerRLEv2 scaleBytes)
 
       return $ Decimal words scale
 
@@ -338,52 +336,75 @@ decodeColumnPart types = do
 
 
 
-decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Segmented ByteString)
+decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
 decodeString = \case
   DIRECT -> do
-    (_, dataBytes) <- popStream
+    (_, dataBytes)   <- popStream
     (_, lengthBytes) <- popStream
     lengths <-
-      lift $ hoistEither (decodeIntegerRLEv1 lengthBytes)
+      liftEither (decodeIntegerRLEv1 lengthBytes)
 
-    return $
-      splitByteString lengths dataBytes
+    return $!
+      bytesOfSegmented $!
+        splitByteString lengths dataBytes
 
   DICTIONARY -> do
-    (_, dataBytes) <- popStream
+    (_, dataBytes)       <- popStream
+    (_, lengthBytes)     <- popStream
     (_, dictionaryBytes) <- popStream
-    (_, lengthBytes) <- popStream
 
-    selections <-
-      lift $ hoistEither (decodeIntegerRLEv1 dataBytes)
+    selections :: Storable.Vector Word64 <-
+      liftEither $
+        decodeIntegerRLEv1 dataBytes
 
-    lengths <-
-      lift $ hoistEither (decodeIntegerRLEv1 lengthBytes)
+    lengths :: Storable.Vector Word64 <-
+      liftEither $
+        decodeIntegerRLEv1 lengthBytes
 
     let
       dictionary =
         Boxed.convert . bytesOfSegmented $
-          splitByteString lengths dataBytes
+          splitByteString lengths dictionaryBytes
+
+      discovered =
+        Boxed.map (\i -> fromMaybe "SHIT" (dictionary Boxed.!? (fromIntegral i))) $
+          Boxed.convert selections
+
+    return $!
+      discovered
+
+  DIRECT_V2 -> do
+    (_, dataBytes)   <- popStream
+    (_, lengthBytes) <- popStream
+    lengths <-
+      liftEither (decodeIntegerRLEv2 lengthBytes)
+
+    return $!
+      bytesOfSegmented $!
+        splitByteString lengths dataBytes
+
+  DICTIONARY_V2 -> do
+    (_, dataBytes)       <- popStream
+    (_, dictionaryBytes) <- popStream
+    (_, lengthBytes)     <- popStream
+
+    selections <-
+      liftEither (decodeIntegerRLEv2 dataBytes)
+
+    lengths :: Storable.Vector Word64 <-
+      liftEither (decodeIntegerRLEv2 lengthBytes)
+
+    let
+      dictionary =
+        Boxed.convert . bytesOfSegmented $
+          splitByteString lengths dictionaryBytes
 
       discovered =
         Boxed.map (\i -> fromMaybe "" (dictionary Boxed.!? (fromIntegral i))) $
           Boxed.convert selections
 
     return $
-      segmentedOfBytes discovered
-
-  DIRECT_V2 -> do
-    _ <- popStream
-    _ <- popStream
-    return $
-      Segmented (Storable.fromList []) (Storable.fromList []) ""
-
-  DICTIONARY_V2 -> do
-    _ <- popStream
-    _ <- popStream
-    _ <- popStream
-    return $
-      Segmented (Storable.fromList []) (Storable.fromList []) ""
+      discovered
 
 
 decodeStruct :: Monad m => [StructField Type] -> OrcDecode m Column
@@ -391,3 +412,16 @@ decodeStruct fields =
   fmap Struct $
     for fields $
       traverse decodeColumn
+
+
+liftMaybe :: MonadError e m => e -> Maybe a -> m a
+liftMaybe =
+  liftEither ... note
+
+
+(...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+(...) = (.) . (.)
+
+
+note :: a -> Maybe b -> Either a b
+note x = maybe (Left x) Right

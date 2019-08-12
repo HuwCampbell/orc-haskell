@@ -29,6 +29,7 @@ library
                        Orc.Data.Segmented
                        Orc.Data.Striped
                        Orc.Encodings.Bytes
+                       Orc.Encodings.Primitives
                        Orc.Encodings.Integers
                        Orc.Schema.Protobuf.Definitions
                        Orc.Schema.Types

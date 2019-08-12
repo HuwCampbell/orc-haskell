@@ -31,6 +31,7 @@ import           System.IO as IO
 
 import           P
 
+
 {-# INLINE decodeBytesNative #-}
 decodeBytesNative :: Word64 -> ByteString -> Storable.Vector Word8
 decodeBytesNative len bytes =

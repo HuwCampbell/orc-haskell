@@ -4,29 +4,26 @@
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE PatternGuards            #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE FlexibleContexts         #-}
 
 module Orc.Encodings.Integers (
-    decodeWord64
-  , decodeInt64
-
-  , decodeFloat32
+    decodeFloat32
   , decodeFloat64
 
   , decodeIntegerRLEv1
   , decodeBase128Varint
 
-  , putBase128Varint
-  , putIntegerRLEv1
-
   , getBase128Varint
+  , putBase128Varint
+
+  , getIntegerRLEv1
+  , putIntegerRLEv1
 
   , getIntegerRLEv2
   , decodeIntegerRLEv2
 ) where
 
-import           Anemone.Foreign.Pack (unpack64, Packed64(..))
-
-import           Control.Monad.ST (ST, runST)
+import           Control.Monad.ST (runST)
 import qualified Data.STRef as ST
 
 import           Data.Serialize.Get (Get)
@@ -36,11 +33,9 @@ import           Data.Serialize.Put (Putter)
 import qualified Data.Serialize.Put as Put
 
 import qualified Data.Serialize.IEEE754 as Get
-import           Data.Bits (Bits, (.&.), (.|.), complement, shiftL, shiftR)
+import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR)
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Internal as ByteString
-import           Data.Int (Int64)
 import           Data.Word (Word8, Word64)
 import           Data.String (String)
 import           Data.Ratio ((%))
@@ -48,7 +43,7 @@ import           Data.Ratio ((%))
 import qualified Data.Vector.Storable as Storable
 import qualified Data.Vector.Storable.Mutable as Mutable
 
-import           Foreign (mallocForeignPtrArray, withForeignPtr, plusPtr)
+import           Foreign (Storable (..), mallocForeignPtrArray, withForeignPtr, plusPtr)
 import           Foreign.Ptr (Ptr)
 
 import           Orc.Encodings.Primitives
@@ -89,12 +84,11 @@ decodeFloat64 bytes =
   Get.runGet (manyStorable Get.getFloat64le) bytes
 
 
-
 {-# INLINE getBase128Varint #-}
-getBase128Varint :: forall w. (Bits w, Num w) => Get w
+getBase128Varint :: forall w. OrcNum w => Get w
 getBase128Varint =
   let
-    go :: w -> Int -> Get w
+    go :: OrcWord w -> Int -> Get w
     go !accumulator !shift = do
       byte <- Get.getWord8
       let
@@ -108,14 +102,14 @@ getBase128Varint =
           (byte .&. b10000000) /= b10000000
 
       if terminates
-        then return new
+        then return (unZigZag new)
         else go new (7 + shift)
   in
     go 0 0
 
 
 {-# INLINE putBase128Varint #-}
-putBase128Varint :: Putter Word64
+putBase128Varint :: forall w. OrcNum w => Putter w
 putBase128Varint =
   let
     go chunk = do
@@ -133,51 +127,51 @@ putBase128Varint =
         then Put.putWord8 masked
         else Put.putWord8 (masked .|. b10000000) >> go remainder
   in
-    go
+    go . zigZag
 
 
-{-# INLINABLE decodeWord64 #-}
-decodeWord64 :: ByteString -> Either String (Storable.Vector Word64)
-decodeWord64 = decodeBase128Varint
+-- {-# INLINABLE decodeWord64 #-}
+-- decodeWord64 :: ByteString -> Either String (Storable.Vector Word64)
+-- decodeWord64 = decodeBase128Varint
 
 
-
-{-# INLINABLE decodeInt64 #-}
-decodeInt64 :: ByteString -> Either String (Storable.Vector Int64)
-decodeInt64 bytes =
-  let
-    words = decodeWord64 bytes
-  in
-    fmap (Storable.map unZigZag64) words
+-- {-# INLINABLE decodeInt64 #-}
+-- decodeInt64 :: ByteString -> Either String (Storable.Vector Int64)
+-- decodeInt64 bytes =
+--   let
+--     words = decodeWord64 bytes
+--   in
+--     fmap (Storable.map unZigZag64) words
 
 
 {-# INLINE decodeIntegerRLEv1 #-}
-decodeIntegerRLEv1 :: ByteString ->  Either String (Storable.Vector Word64)
+decodeIntegerRLEv1 :: forall w . (Storable w, OrcNum w) => ByteString -> Either String (Storable.Vector w)
 decodeIntegerRLEv1 bytes =
   Get.runGet getIntegerRLEv1 bytes
 
 
 {-# INLINE getIntegerRLEv1 #-}
-getIntegerRLEv1 :: Get (Storable.Vector Word64)
+getIntegerRLEv1 :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getIntegerRLEv1 =
   let
-    getSet :: Get (Storable.Vector Word64)
+    getSet :: Get (Storable.Vector w)
     getSet = do
-      header <- Get.getWord8
-      if header < 128
+      header <- Get.getInt8
+      if header >= 0
         then do
           let
-            runLength = header + 3;
+            runLength :: Int
+            runLength = fromIntegral header + 3;
 
           delta   <- Get.getInt8
           initial <- getBase128Varint
           return $
-            Storable.enumFromStepN initial (fromIntegral delta) (fromIntegral runLength)
+            Storable.enumFromStepN initial (fromIntegral delta) runLength
 
         else do
           let
-            listLength = header .&. 0x7F;
-          Storable.replicateM (fromIntegral listLength) getBase128Varint
+            listLength = negate $ fromIntegral header
+          Storable.replicateM listLength getBase128Varint
 
   in
     Storable.concat <$>
@@ -185,10 +179,10 @@ getIntegerRLEv1 =
 
 
 
-putIntegerRLEv1 :: Putter (Storable.Vector Word64)
+putIntegerRLEv1 :: forall w . (Storable w, OrcNum w) => Putter (Storable.Vector w)
 putIntegerRLEv1 =
   let
-    toRuns :: Storable.Vector Word64 -> [(Word64, Word8)]
+    toRuns :: Storable.Vector w -> [(w, Word8)]
     toRuns =
       let
         collect x ((y, n):xs0)
@@ -201,10 +195,10 @@ putIntegerRLEv1 =
         Storable.foldr collect []
 
 
-    takeLiterals :: [(Word64, Word8)] -> ([(Word64, Word8)], [(Word64, Word8)])
+    takeLiterals :: [(w, Word8)] -> ([(w, Word8)], [(w, Word8)])
     takeLiterals =
       let
-        go :: Word8 -> [(Word64, Word8)] -> ([(Word64, Word8)], [(Word64, Word8)])
+        go :: Word8 -> [(w, Word8)] -> ([(w, Word8)], [(w, Word8)])
         go n rest
           | (x, i) : xs <- rest
           , i < 3
@@ -216,7 +210,7 @@ putIntegerRLEv1 =
 
       in go 0
 
-    putSet :: Putter (Storable.Vector Word64)
+    putSet :: Putter (Storable.Vector w)
     putSet words =
       let
         runs = toRuns words
@@ -293,7 +287,9 @@ getIntegerRLEv2 =
         3 ->
           getDelta
 
-        _ -> fail $ "Fuck it " <> show (opening `shiftR` 6)
+        _ ->
+          fail "Impossible!"
+
   in
     Storable.concat <$>
       consumeMany getSet
@@ -368,7 +364,7 @@ getPatchedBase = do
         header .&. 0x000001F
 
   baseValue <-
-    getWordBe $ fromIntegral baseWidth
+    getWordBe baseWidth
 
   dataBytes <-
     Get.getByteString (ceiling ((repeats * width) % 8))
