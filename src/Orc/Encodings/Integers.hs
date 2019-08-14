@@ -233,9 +233,9 @@ putIntegerRLEv1 =
                 sum $ snd <$> noRuns
 
               header =
-                totalLen .|. b10000000
+                negate . fromIntegral $ totalLen
 
-            in do Put.putWord8 header
+            in do Put.putInt8 header
                   for_ noRuns $
                     \(v,i) ->
                       for_ [1.. i] $
@@ -251,13 +251,13 @@ putIntegerRLEv1 =
 
 
 {-# INLINE decodeIntegerRLEv2 #-}
-decodeIntegerRLEv2 :: ByteString ->  Either String (Storable.Vector Word64)
+decodeIntegerRLEv2 :: forall w . (Storable w, OrcNum w) => ByteString ->  Either String (Storable.Vector w)
 decodeIntegerRLEv2 =
   Get.runGet getIntegerRLEv2
 
 
 {-# INLINE getIntegerRLEv2 #-}
-getIntegerRLEv2 :: Get (Storable.Vector Word64)
+getIntegerRLEv2 :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getIntegerRLEv2 =
   let
     ensureEmpty =
@@ -271,7 +271,7 @@ getIntegerRLEv2 =
     consumeSome a =
       (:) <$> a <*> consumeMany a
 
-    getSet :: Get (Storable.Vector Word64)
+    getSet :: Get (Storable.Vector w)
     getSet = do
       opening  <- Get.lookAhead Get.getWord8
       case opening `shiftR` 6 of
@@ -296,7 +296,7 @@ getIntegerRLEv2 =
 
 
 {-# INLINE getShortRepeat #-}
-getShortRepeat :: Get (Storable.Vector Word64)
+getShortRepeat :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getShortRepeat = do
   header <- Get.getWord8
   let
@@ -304,13 +304,15 @@ getShortRepeat = do
       (header `shiftR` 3) + 1
     repeats =
       (header .&. 0x07) + 3
-  value <- getWordBe width
+  value <-
+    unZigZag . fromIntegral <$>
+      getWordBe width
   return $
     Storable.replicate (fromIntegral repeats) value
 
 
 {-# INLINE getDirect #-}
-getDirect :: Get (Storable.Vector Word64)
+getDirect :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getDirect = do
   header <- Get.getWord16be
   let
@@ -329,11 +331,12 @@ getDirect = do
   dataBytes <- Get.getByteString (ceiling (required % 8))
 
   return $
-    readLongsNative dataBytes repeats width
+    Storable.map (unZigZag . fromIntegral) $
+      readLongsNative dataBytes repeats width
 
 
 {-# INLINE getPatchedBase #-}
-getPatchedBase :: Get (Storable.Vector Word64)
+getPatchedBase :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getPatchedBase = do
   header <- Get.getWord32be
   let
@@ -364,7 +367,8 @@ getPatchedBase = do
         header .&. 0x000001F
 
   baseValue <-
-    getWordBe baseWidth
+    unZigZag . fromIntegral <$>
+      getWordBe baseWidth
 
   dataBytes <-
     Get.getByteString (ceiling ((repeats * width) % 8))
@@ -400,14 +404,14 @@ getPatchedBase = do
         Storable.unsafeFreeze working
 
     adjustedValue =
-      Storable.map (+ baseValue) patchedValues
+      Storable.map ((+ baseValue) . fromIntegral) patchedValues
 
   return
     adjustedValue
 
 
 {-# INLINE getDelta #-}
-getDelta :: Get (Storable.Vector Word64)
+getDelta :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getDelta = do
   header <- Get.getWord16be
   let
@@ -437,7 +441,8 @@ getDelta = do
 
   let
     deltas =
-      readLongsNative deltaBytes deltaRepeats width
+      Storable.map (unZigZag . fromIntegral) $
+        readLongsNative deltaBytes deltaRepeats width
 
   return $
     Storable.scanl' (+) baseValue (Storable.singleton deltaBase <> deltas)

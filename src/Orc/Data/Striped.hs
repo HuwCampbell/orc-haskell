@@ -29,7 +29,7 @@ data Column
   | Integer !(Storable.Vector Int32)
   | Long    !(Storable.Vector Int64)
 
-  | Decimal !(Storable.Vector Word64) !(Storable.Vector Word64)
+  | Decimal !(Storable.Vector Word64) !(Storable.Vector Int64)
 
   | Float   !(Storable.Vector Float)
   | Double  !(Storable.Vector Double)

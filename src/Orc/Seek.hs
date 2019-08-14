@@ -285,15 +285,15 @@ decodeColumnPart types = do
 
     (SHORT, DIRECT_V2) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> liftEither (decodeIntegerRLEv2 dataBytes)
+      Integer <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (INT, DIRECT_V2) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> liftEither (decodeIntegerRLEv2 dataBytes)
+      Integer <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (LONG, DIRECT_V2) -> do
       (_, dataBytes) <- popStream
-      Integer . Storable.map fromIntegral <$> liftEither (decodeIntegerRLEv2 dataBytes)
+      Integer <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (FLOAT, _) -> do
       (_, dataBytes) <- popStream
@@ -388,7 +388,7 @@ decodeString = \case
     (_, dictionaryBytes) <- popStream
     (_, lengthBytes)     <- popStream
 
-    selections <-
+    selections :: Storable.Vector Word64 <-
       liftEither (decodeIntegerRLEv2 dataBytes)
 
     lengths :: Storable.Vector Word64 <-
