@@ -12,7 +12,6 @@ module Orc.Encodings.Integers (
 
   , decodeIntegerRLEv1
   , decodeBase128Varint
-  , decodeInt64
 
   , getBase128Varint
   , putBase128Varint
@@ -22,6 +21,8 @@ module Orc.Encodings.Integers (
 
   , getIntegerRLEv2
   , decodeIntegerRLEv2
+
+  , powerOfTen
 ) where
 
 import           Control.Arrow ((&&&))
@@ -69,7 +70,7 @@ manyStorable from =
   ) ()
 
 {-# INLINE decodeBase128Varint #-}
-decodeBase128Varint :: ByteString ->  Either String (Storable.Vector Word64)
+decodeBase128Varint :: forall w. (Storable w, OrcNum w) => ByteString -> Either String (Storable.Vector w)
 decodeBase128Varint bytes =
   Get.runGet (manyStorable getBase128Varint) bytes
 
@@ -421,16 +422,19 @@ getDelta = do
 
     width =
       if headerWidth == 0 then
-          0
-        else
-           bitSizeLookup headerWidth
+        0
+      else
+        bitSizeLookup headerWidth
 
     repeats =
       fromIntegral $
         (header .&. 0x01FF) + 1
 
     deltaRepeats =
-      if repeats < 2 then 0 else repeats - 2
+      if repeats == 1 then
+        0
+      else
+        repeats - 2
 
     required =
       deltaRepeats * width
@@ -453,8 +457,14 @@ getDelta = do
     op =
       if deltaSgn < 0 then (-) else (+)
 
+    scanVec =
+      if repeats == 1 then
+        Storable.empty
+      else
+        Storable.singleton deltaBase <> deltas
+
   return $
-    Storable.scanl' op baseValue (Storable.singleton deltaBase <> deltas)
+    Storable.scanl' op baseValue scanVec
 
 {-# INLINE readLongsNative #-}
 readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64
@@ -491,3 +501,9 @@ bitSizeLookup =
   in
     \key ->
       table Storable.! fromIntegral key
+
+
+powerOfTen :: Integral i => i -> i -> Ratio i
+powerOfTen base power =
+  base % (10 ^ power)
+{-# INLINE powerOfTen #-}

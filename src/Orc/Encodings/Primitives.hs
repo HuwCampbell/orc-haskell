@@ -17,6 +17,7 @@ import           Data.Int (Int8, Int16, Int32, Int64)
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 import           Data.Word (Word8, Word16, Word32, Word64)
+import           Data.WideWord (Int128, Word128)
 
 import           P
 
@@ -101,6 +102,24 @@ instance OrcNum Int64 where
     unZigZag64
 
 
+instance OrcNum Word128 where
+  type OrcWord Word128 = Word128
+  zigZag =
+    id
+
+  unZigZag =
+    id
+
+
+instance OrcNum Int128 where
+  type OrcWord Int128 = Word128
+  zigZag =
+    zigZag128
+
+  unZigZag =
+    unZigZag128
+
+
 zigZag8 :: Int8 -> Word8
 zigZag8 !n =
   fromIntegral $! (n `shiftL` 1) `xor` (n `shiftR` 7)
@@ -149,6 +168,17 @@ unZigZag64 !n =
 {-# INLINE unZigZag64 #-}
 
 
+zigZag128 :: Int128 -> Word128
+zigZag128 !n =
+  fromIntegral $! (n `shiftL` 1) `xor` (n `shiftR` 127)
+{-# INLINE zigZag128 #-}
+
+
+unZigZag128 :: Word128 -> Int128
+unZigZag128 !n =
+  fromIntegral $! (n `shiftR` 1) `xor` negate (n .&. 0x1)
+{-# INLINE unZigZag128 #-}
+
 -- | Read a Word64 in big endian format given its size in bits
 getWordBe :: forall i. OrcNum i => Word8 -> Get i
 getWordBe n =
@@ -163,3 +193,4 @@ getWordBe n =
   in
     unZigZag <$> go 0 n
 {-# INLINE getWordBe #-}
+

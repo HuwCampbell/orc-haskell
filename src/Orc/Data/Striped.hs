@@ -7,6 +7,7 @@ import           P
 import           Data.ByteString (ByteString)
 import           Data.Ratio (Ratio)
 import           Data.Word (Word8, Word64)
+import           Data.WideWord (Int128)
 
 import           Orc.Data.Data
 import           Orc.Data.Segmented
@@ -30,7 +31,7 @@ data Column
   | Integer !(Storable.Vector Int32)
   | Long    !(Storable.Vector Int64)
 
-  | Decimal !(Storable.Vector (Ratio Int64))
+  | Decimal !(Storable.Vector (Ratio Int128))
 
   | Float   !(Storable.Vector Float)
   | Double  !(Storable.Vector Double)
