@@ -321,7 +321,7 @@ decodeColumnPart types = do
     (DECIMAL, enc) -> do
       (_, dataBytes)  <- popStream
       (_, scaleBytes) <- popStream
-      words           <- liftEither (decodeBase128Varint dataBytes)
+      words           <- liftEither (decodeInt64 dataBytes)
       scale           <-
         case enc of
           DIRECT ->
@@ -329,12 +329,14 @@ decodeColumnPart types = do
           _ ->
             liftEither (decodeIntegerRLEv2 scaleBytes)
 
-      return $ Decimal words scale
+      return $ Decimal $ Storable.zipWith exponate words scale
 
     (u,k) -> pure $ UnhandleColumn u k
 
 
-
+exponate :: Int64 -> Word64 -> Ratio Int64
+exponate base power =
+  base % (10 ^ power)
 
 decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
 decodeString = \case
@@ -367,7 +369,7 @@ decodeString = \case
           splitByteString lengths dictionaryBytes
 
       discovered =
-        Boxed.map (\i -> fromMaybe "SHIT" (dictionary Boxed.!? (fromIntegral i))) $
+        Boxed.map (\i -> fromMaybe "" (dictionary Boxed.!? (fromIntegral i))) $
           Boxed.convert selections
 
     return $!

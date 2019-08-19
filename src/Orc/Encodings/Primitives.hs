@@ -21,6 +21,15 @@ import           Data.Word (Word8, Word16, Word32, Word64)
 import           P
 
 
+-- |
+-- Class for either Natural or Integral fixed sized Orc numbers.
+--
+-- We use these to specify separate Orc reader types in a polymorphic
+-- way, with ZigZag encoding being used when appropriate.
+--
+-- The potentially zigzag encoded natural number type is parameterised
+-- with the OrcWord associated type family.
+--
 class (Bits (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
   type OrcWord i :: *
   zigZag :: i -> OrcWord i
@@ -29,8 +38,10 @@ class (Bits (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
 
 instance OrcNum Word8 where
   type OrcWord Word8 = Word8
-  zigZag = id
-  unZigZag = id
+  zigZag =
+    id
+  unZigZag =
+    id
 
 
 instance OrcNum Int8 where
@@ -42,8 +53,10 @@ instance OrcNum Int8 where
 
 instance OrcNum Word16 where
   type OrcWord Word16 = Word16
-  zigZag = id
-  unZigZag = id
+  zigZag =
+    id
+  unZigZag =
+    id
 
 
 instance OrcNum Int16 where
@@ -57,8 +70,10 @@ instance OrcNum Int16 where
 
 instance OrcNum Word32 where
   type OrcWord Word32 = Word32
-  zigZag = id
-  unZigZag = id
+  zigZag =
+    id
+  unZigZag =
+    id
 
 
 instance OrcNum Int32 where
@@ -71,8 +86,10 @@ instance OrcNum Int32 where
 
 instance OrcNum Word64 where
   type OrcWord Word64 = Word64
-  zigZag = id
-  unZigZag = id
+  zigZag =
+    id
+  unZigZag =
+    id
 
 
 instance OrcNum Int64 where
@@ -133,10 +150,10 @@ unZigZag64 !n =
 
 
 -- | Read a Word64 in big endian format given its size in bits
-getWordBe :: Word8 -> Get Word64
-getWordBe =
+getWordBe :: forall i. OrcNum i => Word8 -> Get i
+getWordBe n =
   let
-    go :: Word64 -> Word8 -> Get Word64
+    go :: OrcWord i -> Word8 -> Get (OrcWord i)
     go acc n
       | n <= 0
       = return acc
@@ -144,5 +161,5 @@ getWordBe =
       = do next <- fromIntegral <$> Get.getWord8
            go ((acc `shiftL` 8) .|. next) (n - 1)
   in
-    go 0
+    unZigZag <$> go 0 n
 {-# INLINE getWordBe #-}

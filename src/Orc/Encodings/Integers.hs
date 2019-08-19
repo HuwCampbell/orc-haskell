@@ -12,6 +12,7 @@ module Orc.Encodings.Integers (
 
   , decodeIntegerRLEv1
   , decodeBase128Varint
+  , decodeInt64
 
   , getBase128Varint
   , putBase128Varint
@@ -23,6 +24,7 @@ module Orc.Encodings.Integers (
   , decodeIntegerRLEv2
 ) where
 
+import           Control.Arrow ((&&&))
 import           Control.Monad.ST (runST)
 import qualified Data.STRef as ST
 
@@ -135,13 +137,13 @@ putBase128Varint =
 -- decodeWord64 = decodeBase128Varint
 
 
--- {-# INLINABLE decodeInt64 #-}
--- decodeInt64 :: ByteString -> Either String (Storable.Vector Int64)
--- decodeInt64 bytes =
---   let
---     words = decodeWord64 bytes
---   in
---     fmap (Storable.map unZigZag64) words
+{-# INLINABLE decodeInt64 #-}
+decodeInt64 :: ByteString -> Either String (Storable.Vector Int64)
+decodeInt64 bytes =
+  let
+    words = decodeBase128Varint bytes
+  in
+    fmap (Storable.map unZigZag64) words
 
 
 {-# INLINE decodeIntegerRLEv1 #-}
@@ -305,8 +307,7 @@ getShortRepeat = do
     repeats =
       (header .&. 0x07) + 3
   value <-
-    unZigZag . fromIntegral <$>
-      getWordBe width
+    getWordBe width
   return $
     Storable.replicate (fromIntegral repeats) value
 
@@ -367,8 +368,7 @@ getPatchedBase = do
         header .&. 0x000001F
 
   baseValue <-
-    unZigZag . fromIntegral <$>
-      getWordBe baseWidth
+    getWordBe baseWidth
 
   dataBytes <-
     Get.getByteString (ceiling ((repeats * width) % 8))
@@ -415,17 +415,22 @@ getDelta :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getDelta = do
   header <- Get.getWord16be
   let
+    headerWidth =
+      fromIntegral $
+        (header .&. 0x3E00) `shiftR` 9
+
     width =
-      bitSizeLookup $
-        fromIntegral $
-          (header .&. 0x3E00) `shiftR` 9
+      if headerWidth == 0 then
+          0
+        else
+           bitSizeLookup headerWidth
 
     repeats =
       fromIntegral $
         (header .&. 0x01FF) + 1
 
     deltaRepeats =
-      repeats - 2
+      if repeats < 2 then 0 else repeats - 2
 
     required =
       deltaRepeats * width
@@ -433,8 +438,9 @@ getDelta = do
   baseValue <-
     getBase128Varint
 
-  deltaBase <-
-    fromIntegral . unZigZag64 <$> getBase128Varint
+  (deltaBase, deltaSgn) <-
+    (((fromIntegral . abs) &&& signum) . unZigZag64) <$>
+      getBase128Varint
 
   deltaBytes <-
     Get.getByteString (ceiling (required % 8))
@@ -444,8 +450,11 @@ getDelta = do
       Storable.map (unZigZag . fromIntegral) $
         readLongsNative deltaBytes deltaRepeats width
 
+    op =
+      if deltaSgn < 0 then (-) else (+)
+
   return $
-    Storable.scanl' (+) baseValue (Storable.singleton deltaBase <> deltas)
+    Storable.scanl' op baseValue (Storable.singleton deltaBase <> deltas)
 
 {-# INLINE readLongsNative #-}
 readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64
@@ -455,7 +464,9 @@ readLongsNative bytes len bitsize =
       (inPtr, offset, _inLen) =
         ByteString.toForeignPtr bytes
 
-    outPtr <- mallocForeignPtrArray (fromIntegral len)
+    outPtr <-
+      mallocForeignPtrArray $
+        fromIntegral len
 
     withForeignPtr inPtr $ \inPtr' ->
       withForeignPtr outPtr $ \outPtr' ->

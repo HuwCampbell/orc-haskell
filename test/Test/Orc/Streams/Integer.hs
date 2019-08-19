@@ -96,6 +96,7 @@ prop_spec_short_repeat_IntegerRLEv2 =
       shortRepeatExampleInput =
         Strict.pack [0x0a, 0x27, 0x10]
 
+      shortRepeatExpected :: Storable.Vector Word64
       shortRepeatExpected =
         Storable.fromList [10000, 10000, 10000, 10000, 10000]
 
@@ -112,6 +113,7 @@ prop_spec_direct_IntegerRLEv2 =
       directExampleInput =
         Strict.pack [0x5e, 0x03, 0x5c, 0xa1, 0xab, 0x1e, 0xde, 0xad, 0xbe, 0xef]
 
+      directExpected :: Storable.Vector Word64
       directExpected =
         Storable.fromList [23713, 43806, 57005, 48879]
 
@@ -131,6 +133,7 @@ prop_spec_patch_IntegerRLEv2 =
           0xd0, 0x1e, 0x00, 0x14, 0x70, 0x28, 0x32, 0x3c, 0x46, 0x50, 0x5a, 0x64, 0x6e,
           0x78, 0x82, 0x8c, 0x96, 0xa0, 0xaa, 0xb4, 0xbe, 0xfc, 0xe8]
 
+      directExpected :: Storable.Vector Word64
       directExpected =
         Storable.fromList [2030, 2000, 2020, 1000000, 2040, 2050, 2060, 2070,
           2080, 2090, 2100, 2110, 2120, 2130, 2140, 2150, 2160, 2170, 2180, 2190]
@@ -148,6 +151,7 @@ prop_spec_delta_IntegerRLEv2 =
       deltaExampleInput =
         Strict.pack [0xc6, 0x09, 0x02, 0x02, 0x22, 0x42, 0x42, 0x46]
 
+      deltaExpected :: Storable.Vector Word64
       deltaExpected =
         Storable.fromList [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 
