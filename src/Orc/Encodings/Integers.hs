@@ -133,10 +133,6 @@ putBase128Varint =
     go . zigZag
 
 
--- {-# INLINABLE decodeWord64 #-}
--- decodeWord64 :: ByteString -> Either String (Storable.Vector Word64)
--- decodeWord64 = decodeBase128Varint
-
 
 {-# INLINABLE decodeInt64 #-}
 decodeInt64 :: ByteString -> Either String (Storable.Vector Int64)
@@ -274,28 +270,38 @@ getIntegerRLEv2 =
     consumeSome a =
       (:) <$> a <*> consumeMany a
 
+    getLabelledSet :: Get (Storable.Vector w)
+    getLabelledSet = do
+      readSoFar <- Get.bytesRead
+      remaining <- Get.remaining
+      Get.label (show (readSoFar, remaining)) getSet
+
     getSet :: Get (Storable.Vector w)
     getSet = do
       opening  <- Get.lookAhead Get.getWord8
       case opening `shiftR` 6 of
         0 ->
-          getShortRepeat
+          Get.label "short"
+            getShortRepeat
 
         1 ->
-          getDirect
+          Get.label "direct"
+            getDirect
 
         2 ->
-          getPatchedBase
+          Get.label "patched"
+            getPatchedBase
 
         3 ->
-          getDelta
+          Get.label "delta"
+            getDelta
 
         _ ->
           fail "Impossible!"
 
   in
     Storable.concat <$>
-      consumeMany getSet
+      consumeMany getLabelledSet
 
 
 {-# INLINE getShortRepeat #-}

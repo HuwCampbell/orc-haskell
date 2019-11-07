@@ -40,7 +40,7 @@ makeIndexed =
 
 nextIndex :: Indexed a -> Indexed a
 nextIndex (Indexed i as) =
-  Indexed (i +1) (drop 1 as)
+  Indexed (i + 1) (drop 1 as)
 
 currentIndex :: Indexed a -> Word32
 currentIndex (Indexed i _) = i

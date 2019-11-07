@@ -20,6 +20,7 @@ import qualified X.Data.Vector.Storable as Storable
 data Column
   -- Composite Columns
   = Struct  ![StructField Column]
+  | Union   !(Storable.Vector Word8) ![Column]
   | List    !(Storable.Vector Int64) !Column
   | Map     !Column !Column
 
@@ -31,7 +32,7 @@ data Column
   | Integer !(Storable.Vector Int32)
   | Long    !(Storable.Vector Int64)
 
-  | Decimal !(Storable.Vector (Ratio Int128))
+  | Decimal !(Storable.Vector Int128) !(Storable.Vector Int16)
 
   | Float   !(Storable.Vector Float)
   | Double  !(Storable.Vector Double)
@@ -42,5 +43,5 @@ data Column
 
   -- For Nullable columns.
   | Partial (Storable.Vector Word8) Column
-  | UnhandleColumn Type ColumnEncodingKind
+  | UnhandleColumn Type (Maybe ColumnEncodingKind)
   deriving (Eq, Show)

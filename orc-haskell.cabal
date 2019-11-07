@@ -29,6 +29,7 @@ library
                        Orc.Data.Segmented
                        Orc.Data.Striped
                        Orc.Encodings.Bytes
+                       Orc.Encodings.Compression
                        Orc.Encodings.Primitives
                        Orc.Encodings.Integers
                        Orc.Schema.Protobuf.Definitions
@@ -63,6 +64,7 @@ library
                      , transformers                    >= 0.4        && < 0.6
                      , vector
                      , wide-word
+                     , zlib
 
   hs-source-dirs:      src
   default-language:    Haskell98

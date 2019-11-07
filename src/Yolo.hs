@@ -3,7 +3,7 @@
 {-# LANGUAGE UndecidableInstances   #-}
 module Yolo where
 
-import System.IO
+import GHC.Stack
 import System.IO.Unsafe
 
 import Text.Show.Pretty
@@ -11,13 +11,11 @@ import Text.Show.Pretty
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Resource
 
-
 yoloPrint :: (Show a, Yolo f) => f a -> IO ()
 yoloPrint = putStr . ppShow . yolo
 
-
 class Yolo f where
-  yolo :: f a -> a
+  yolo :: HasCallStack => f a -> a
 
 instance Yolo Maybe where
   yolo (Just x) = x

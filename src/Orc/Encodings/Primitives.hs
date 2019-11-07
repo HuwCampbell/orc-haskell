@@ -9,10 +9,14 @@ module Orc.Encodings.Primitives (
   , unZigZag64
 
   , getWordBe
+  , getWord24le
+
   , OrcNum (..)
 ) where
 
 import           Data.Bits (Bits, shiftL, shiftR, xor, (.&.), (.|.))
+import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Unsafe as Unsafe
 import           Data.Int (Int8, Int16, Int32, Int64)
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
@@ -51,6 +55,7 @@ instance OrcNum Int8 where
     zigZag8
   unZigZag =
     unZigZag8
+
 
 instance OrcNum Word16 where
   type OrcWord Word16 = Word16
@@ -194,3 +199,11 @@ getWordBe n =
     unZigZag <$> go 0 n
 {-# INLINE getWordBe #-}
 
+
+getWord24le :: Get Word32
+getWord24le = do
+  s <- Get.getBytes 3
+  return $!
+    (fromIntegral (s `Unsafe.unsafeIndex` 2) `shiftL` 16) .|.
+    (fromIntegral (s `Unsafe.unsafeIndex` 1) `shiftL`  8) .|.
+    (fromIntegral (s `Unsafe.unsafeIndex` 0))
