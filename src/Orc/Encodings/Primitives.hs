@@ -207,3 +207,4 @@ getWord24le = do
     (fromIntegral (s `Unsafe.unsafeIndex` 2) `shiftL` 16) .|.
     (fromIntegral (s `Unsafe.unsafeIndex` 1) `shiftL`  8) .|.
     (fromIntegral (s `Unsafe.unsafeIndex` 0))
+{-# INLINE getWord24le #-}

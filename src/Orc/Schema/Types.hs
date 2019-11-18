@@ -434,7 +434,7 @@ fromStream raw =
 
 
 data ColumnEncoding = ColumnEncoding {
-  columnEncodingKind :: Maybe Proto.ColumnEncodingKind
+  columnEncodingKind :: Proto.ColumnEncodingKind
 , columnEncodingdictionarySize :: Maybe Word32
 } deriving (Eq, Ord, Show)
 

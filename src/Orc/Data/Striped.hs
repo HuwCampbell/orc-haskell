@@ -22,7 +22,7 @@ data Column
   = Struct  ![StructField Column]
   | Union   !(Storable.Vector Word8) ![Column]
   | List    !(Storable.Vector Int64) !Column
-  | Map     !Column !Column
+  | Map     !(Storable.Vector Int64) !Column !Column
 
   -- Primitive Columns
   | Bool    !(Storable.Vector Word8)
@@ -43,5 +43,5 @@ data Column
 
   -- For Nullable columns.
   | Partial (Storable.Vector Word8) Column
-  | UnhandleColumn Type (Maybe ColumnEncodingKind)
+  | UnhandleColumn Type ColumnEncodingKind
   deriving (Eq, Show)

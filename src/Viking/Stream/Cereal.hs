@@ -13,6 +13,7 @@ module Viking.Stream.Cereal (
 
 import           Control.Monad.Morph (hoist)
 import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Either (EitherT, left)
 
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
@@ -20,8 +21,6 @@ import qualified Data.ByteString as Strict
 import qualified Data.Text as Text
 
 import           P
-
-import           X.Control.Monad.Trans.Either (EitherT, left)
 
 import           Viking
 import qualified Viking.ByteStream as ByteStream

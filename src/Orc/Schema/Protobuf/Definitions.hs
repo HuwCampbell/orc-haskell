@@ -288,7 +288,7 @@ data ColumnEncodingKind
 
 
 data ColumnEncoding = ColumnEncoding {
-    columnEncodingKind :: Optional 1 (Enumeration ColumnEncodingKind)
+    columnEncodingKind :: Required 1 (Enumeration ColumnEncodingKind)
   , columnEncodingdictionarySize :: Optional 2 (Value Word32)
   } deriving (Eq, Ord, Show, Generic)
 

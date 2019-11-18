@@ -4,6 +4,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Test.Viking.Stream.Cereal where
 
+import           Control.Monad.Trans.Either (EitherT, runEitherT)
+
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 import qualified Data.Serialize.Put as Put
@@ -23,9 +25,6 @@ import qualified Viking.ByteStream as ByteStream
 import qualified Viking.Stream as Stream
 import           Viking.Stream.Cereal (BinaryError)
 import qualified Viking.Stream.Cereal as Stream
-
-import           X.Control.Monad.Trans.Either (EitherT, runEitherT)
-
 
 prop_get :: Property
 prop_get =
