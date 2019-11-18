@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 module Orc.Data.Segmented (
-    Segmented(..)
+    Segmented (..)
   , segmentedLength
   , segmentedOfBytes
   , bytesOfSegmented
@@ -54,7 +54,6 @@ segmentedOfBytes bss =
     !offsets =
       Storable.prescanl' (+) 0 lengths
   in
-    -- TODO don't use list
     Segmented offsets lengths (B.concat $ Boxed.toList bss)
 {-# INLINE segmentedOfBytes #-}
 

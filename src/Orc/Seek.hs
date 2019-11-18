@@ -255,26 +255,40 @@ incrementColumn =
   modify' $ \(ix, a, b) -> (nextIndex ix, a, b)
 
 
-withinColumn :: Monad m => OrcDecode m a -> OrcDecode m a
-withinColumn f = do
-  incrementColumn
-  ret <- f
+decrementColumn :: Monad m => OrcDecode m ()
+decrementColumn =
   modify' $ \(ix, a, b) -> (prevIndex ix, a, b)
-  pure ret
 
 
-decodeColumn :: Monad m => Type -> OrcDecode m Column
-decodeColumn typs =
-  withPresence <*> decodeColumnPart typs <* incrementColumn
+-- | Push inwards when running a nested column
+--   such as a Struct, Map or List.
+--   We need to pop out again, as the wrapping decodeColumn
+--   will increment the column when complete.
+withinColumn :: Monad m => OrcDecode m a -> OrcDecode m a
+withinColumn f =
+  incrementColumn *> f <* decrementColumn
 
 
 currentEncoding :: Monad m => OrcDecode m (Orc.ColumnEncoding)
 currentEncoding = do
   (ix, _, _) <- get
-  maybe (throwError $ "Couldn't find Column encoding for column: " <> show ix) pure (currentValue ix)
+  maybe
+    (throwError $ "Couldn't find Column encoding for column: " <> show ix)
+    pure
+    (currentValue ix)
 
 
--- | Read A Column, Present Column has already been handled.
+-- | Read a Column including if its nullable.
+--
+--   After we're done, increment the column index.
+decodeColumn :: Monad m => Type -> OrcDecode m Column
+decodeColumn typs =
+  withPresence <*> decodeColumnPart typs <* incrementColumn
+
+
+-- | Read a Column
+--
+--   The present column component has already been handled.
 decodeColumnPart :: Monad m => Type -> OrcDecode m Column
 decodeColumnPart typs = do
   currentEncoding' <-

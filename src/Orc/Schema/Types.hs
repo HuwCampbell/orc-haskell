@@ -353,6 +353,7 @@ data UserMetadataItem = UserMetadataItem {
   , value :: ByteString
   } deriving (Eq, Ord, Show, Generic)
 
+
 fromUserMetadataItem :: Proto.UserMetadataItem -> UserMetadataItem
 fromUserMetadataItem raw =
   UserMetadataItem

@@ -42,6 +42,7 @@ import           Codec.Compression.Zlib.Internal (DecompressError)
 
 import           P
 
+
 readCompressedStream :: Maybe CompressionKind -> ByteString -> Either String ByteString
 readCompressedStream = \case
   Nothing ->
@@ -77,7 +78,7 @@ readCompressedStream = \case
       if isOriginal == 1 then pure pertinent else
         Unsafe.unsafePerformIO $
           tryJust
-            (\(_ :: DecompressError) -> Just ("DEFLATE decompression failed"))
+            (\(e :: DecompressError) -> Just ("DEFLATE decompression failed with " <> show e))
             (evaluate (overLazy Zlib.decompress pertinent))
 
   Just u ->
