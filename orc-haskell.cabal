@@ -46,7 +46,6 @@ library
                      , ambiata-snapper
                      , ambiata-x-vector
                      , ambiata-viking
-                     , binary                          >= 0.7        && < 0.9
                      , bytestring
                      , cereal
                      , exceptions                      >= 0.10

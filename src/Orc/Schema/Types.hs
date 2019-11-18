@@ -96,7 +96,7 @@ data Footer = Footer {
   , statistics :: [ColumnStatistics]
       -- the maximum number of rows in each index entry
   , rowIndexStride :: Maybe Word32
-  } deriving (Eq, Ord, Show, Generic)
+  } deriving (Eq, Ord, Show)
 
 
 readFooter :: ByteString -> Either String Footer
@@ -127,7 +127,7 @@ data StripeInformation = StripeInformation {
   , siFooterLength :: Maybe Word64
     -- the number of rows in the stripe
   , siNumberOfRows :: Maybe Word64
-  } deriving (Eq, Ord, Show, Generic)
+  } deriving (Eq, Ord, Show)
 
 
 fromStripeInformation :: Proto.StripeInformation -> StripeInformation
