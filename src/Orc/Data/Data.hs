@@ -11,13 +11,15 @@ module Orc.Data.Data (
   , nextIndex
   , currentIndex
   , currentValue
+  , prevIndex
   ) where
 
-import         Control.Monad.Except
+import           Control.Monad.Except
 
-import         Data.Word (Word32)
-import         Data.String (String)
-import         P
+import           Data.Word (Word32)
+import           Data.String (String)
+import qualified Data.Vector as Boxed
+import           P
 
 data StructField a = StructField {
     fieldName :: StructFieldName
@@ -31,19 +33,23 @@ newtype StructFieldName = StructFieldName {
 data Indexed a =
   Indexed {
     _currentIndex :: Word32
-  , _indexed :: [a]
+  , _indexed :: Boxed.Vector a
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 makeIndexed :: [a] -> Indexed a
 makeIndexed =
-  Indexed 0
+  Indexed 0 . Boxed.fromList
 
 nextIndex :: Indexed a -> Indexed a
 nextIndex (Indexed i as) =
-  Indexed (i + 1) (drop 1 as)
+  Indexed (i + 1) as
+
+prevIndex :: Indexed a -> Indexed a
+prevIndex (Indexed i as) =
+  Indexed (i - 1) as
 
 currentIndex :: Indexed a -> Word32
 currentIndex (Indexed i _) = i
 
 currentValue :: Indexed a -> Maybe a
-currentValue (Indexed _ as) = head as
+currentValue (Indexed i as) = as Boxed.!? (fromIntegral i)

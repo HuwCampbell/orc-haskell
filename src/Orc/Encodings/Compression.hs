@@ -61,7 +61,7 @@ readCompressedStream = \case
 
       if isOriginal == 1 then pure pertinent else
         note "Snappy decompression failed." $
-          Snapper.decompress bytes
+          Snapper.decompress pertinent
 
   Just ZLIB ->
     \bytes -> do

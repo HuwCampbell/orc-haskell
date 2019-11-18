@@ -274,7 +274,7 @@ getIntegerRLEv2 =
     getLabelledSet = do
       readSoFar <- Get.bytesRead
       remaining <- Get.remaining
-      Get.label (show (readSoFar, remaining)) getSet
+      Get.label ("Read so far: " <> show readSoFar <> "; Remaining: " <> show remaining) getSet
 
     getSet :: Get (Storable.Vector w)
     getSet = do
@@ -336,7 +336,9 @@ getDirect = do
     required =
       repeats * width
 
-  dataBytes <- Get.getByteString (ceiling (required % 8))
+  dataBytes <-
+    -- trace ("Lol width: " <> show width <> "Lol repeats: " <> show repeats <> "Lol required: " <> show required) $
+    Get.getByteString (ceiling (required % 8))
 
   return $
     Storable.map (unZigZag . fromIntegral) $
@@ -375,6 +377,7 @@ getPatchedBase = do
         header .&. 0x000001F
 
   baseValue <-
+    -- TODO, negate based on most significant bit
     getWordBe baseWidth
 
   dataBytes <-

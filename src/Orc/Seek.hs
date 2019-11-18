@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
@@ -32,7 +33,7 @@ import           Viking (Of (..))
 import qualified Viking.Stream as Viking
 
 import           Orc.Data.Segmented
-import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed)
+import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed, prevIndex)
 import           Orc.Data.Striped (Column (..))
 import           Orc.Schema.Types as Orc
 import           Orc.Encodings.Bytes
@@ -167,9 +168,9 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
 
   rowIndexData <-
     newEitherT $ readCompressedStream mCompressionInfo <$> liftIO (ByteString.hGet handle $ fromIntegral riLength)
+
   rowIndex <-
     liftEither $
-      trace <$> show <*> id $
       readRowIndex rowIndexData
 
   dataBytes <-
@@ -180,8 +181,7 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
 
   stripeFooter <-
     liftEither $
-      trace <$> show <*> id $
-        readStripeFooter stripeFooterData
+      readStripeFooter stripeFooterData
 
   let
     nonRowIndexStreams =
@@ -198,8 +198,8 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
 
 
 decodeColumnTop :: MonadIO m => Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteString -> EitherT String m Column
-decodeColumnTop typs mCompression encodings streams dataBytes =
-  evalStateT (runReaderT (decodeColumn typs) mCompression) (makeIndexed encodings, streams, dataBytes)
+decodeColumnTop typs mCompression encodings orcStreams dataBytes =
+  evalStateT (runReaderT (decodeColumn typs) mCompression) (makeIndexed encodings, orcStreams, dataBytes)
 
 
 type OrcDecode m = ReaderT (Maybe CompressionKind) (StateT (Indexed Orc.ColumnEncoding, [Orc.Stream], ByteString) (EitherT String m))
@@ -219,16 +219,20 @@ withPresence = do
           decodeBytes presenceBytes
 
       return $ Partial presenceColumn
-    _ -> return id
+
+    _else ->
+      return id
 
 
 popStream :: Monad m => OrcDecode m (Orc.Stream, ByteString)
 popStream = do
   compressionInfo <-
     ask
-  (ix, streams, bytes) <-
+
+  (ix, orcStreams, bytes) <-
     get
-  case streams of
+
+  case orcStreams of
     s:rest -> do
       colLength <-
         liftMaybe "Need Column Length" $
@@ -237,7 +241,7 @@ popStream = do
         (uncompressedBytes, remainingBytes) =
           ByteString.splitAt (fromIntegral colLength) bytes
 
-      theseBytes <-
+      !theseBytes <-
         liftEither $ readCompressedStream compressionInfo uncompressedBytes
 
       put (ix, rest, remainingBytes)
@@ -251,9 +255,17 @@ incrementColumn =
   modify' $ \(ix, a, b) -> (nextIndex ix, a, b)
 
 
+withinColumn :: Monad m => OrcDecode m a -> OrcDecode m a
+withinColumn f = do
+  incrementColumn
+  ret <- f
+  modify' $ \(ix, a, b) -> (prevIndex ix, a, b)
+  pure ret
+
+
 decodeColumn :: Monad m => Type -> OrcDecode m Column
-decodeColumn types =
-  withPresence <*> decodeColumnPart types <* incrementColumn
+decodeColumn typs =
+  withPresence <*> decodeColumnPart typs <* incrementColumn
 
 
 currentEncoding :: Monad m => OrcDecode m (Orc.ColumnEncoding)
@@ -264,11 +276,15 @@ currentEncoding = do
 
 -- | Read A Column, Present Column has already been handled.
 decodeColumnPart :: Monad m => Type -> OrcDecode m Column
-decodeColumnPart types = do
-  encodingKind <-
-    columnEncodingKind <$> currentEncoding
+decodeColumnPart typs = do
+  currentEncoding' <-
+     currentEncoding
 
-  case trace <$> show <*> id $ (types, encodingKind) of
+  let
+    encodingKind =
+      columnEncodingKind currentEncoding'
+
+  case (typs, encodingKind) of
     (BOOLEAN, _) -> do
       (_, presenceBytes) <-
         popStream
@@ -279,7 +295,6 @@ decodeColumnPart types = do
 
       return $
         Bool le'column
-
 
     (BYTE, _) -> do
       (_, dataBytes) <- popStream
@@ -347,13 +362,17 @@ decodeColumnPart types = do
       _ <- popStream
       pure $ UnhandleColumn TIMESTAMP enc
 
+    (DATE, enc) -> do
+      _ <- popStream
+      pure $ UnhandleColumn DATE enc
+
     (BINARY, enc) -> do
       _ <- popStream
       _ <- popStream
       pure $ UnhandleColumn BINARY enc
 
     (STRUCT fields, _) ->
-      incrementColumn >>
+      withinColumn $
         decodeStruct fields
 
     (UNION fields, _) -> do
@@ -364,13 +383,12 @@ decodeColumnPart types = do
         liftEither $
           decodeBytes tagBytes
 
-      incrementColumn
+      withinColumn $ do
+        decodedFields <-
+          for fields decodeColumn
 
-      decodedFields <-
-        for fields decodeColumn
-
-      pure $
-        Union tags decodedFields
+        pure $
+          Union tags decodedFields
 
     (LIST typ, enc) -> do
       (_, lengthBytes) <-
@@ -383,13 +401,12 @@ decodeColumnPart types = do
           _ ->
             liftEither (decodeIntegerRLEv1 lengthBytes)
 
-      incrementColumn
+      withinColumn $ do
+        internal <-
+          decodeColumn typ
 
-      internal <-
-        decodeColumn typ
-
-      pure $
-        List lengths internal
+        pure $
+          List lengths internal
 
     (MAP keyTyp valTyp, enc) -> do
       (_, lengthBytes) <-
@@ -402,20 +419,15 @@ decodeColumnPart types = do
           _ ->
             liftEither (decodeIntegerRLEv1 lengthBytes)
 
-      incrementColumn
+      withinColumn $ do
+        keys <-
+          decodeColumn keyTyp
 
-      keys <-
-        decodeColumn keyTyp
+        values <-
+          decodeColumn valTyp
 
-      values <-
-        decodeColumn valTyp
-
-      pure $
-        Map lengths keys values
-
-    (u,k) ->
-      throwError $ show (u, k)
-
+        pure $
+          Map lengths keys values
 
 decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
 decodeString = \case
@@ -457,6 +469,7 @@ decodeString = \case
   DIRECT_V2 -> do
     (_, dataBytes)   <- popStream
     (_, lengthBytes) <- popStream
+
     lengths <-
       liftEither (decodeIntegerRLEv2 lengthBytes)
 
@@ -467,15 +480,15 @@ decodeString = \case
   DICTIONARY_V2 -> do
     (_, dataBytes)       <- popStream
     -- Specification appears to be incorrect here
-    -- Length bytes comes before dictionary bytes.
+    -- Length bytes comes before dictionary bytes
     (_, lengthBytes)     <- popStream
     (_, dictionaryBytes) <- popStream
 
     selections :: Storable.Vector Word64 <-
-      liftEither (decodeIntegerRLEv2 (trace <$> show <*> id $ dataBytes))
+      liftEither (decodeIntegerRLEv2 dataBytes)
 
     lengths :: Storable.Vector Word64 <-
-      liftEither (decodeIntegerRLEv2 (trace <$> show <*> id $ lengthBytes))
+      liftEither (decodeIntegerRLEv2 lengthBytes)
 
     let
       dictionary =
