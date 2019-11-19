@@ -364,7 +364,7 @@ decodeColumnPart typs = do
 
     (DOUBLE, _) -> do
       dataBytes <- popStream
-      doubles <- liftEither (decodeFloat64 dataBytes)
+      doubles   <- liftEither (decodeFloat64 dataBytes)
       return $ Double doubles
 
     (STRING, encoding) ->
@@ -379,8 +379,8 @@ decodeColumnPart typs = do
     (DECIMAL, enc) -> do
       dataBytes  <- popStream
       scaleBytes <- popStream
-      words           <- liftEither (decodeBase128Varint dataBytes)
-      scale           <-
+      words      <- liftEither (decodeBase128Varint dataBytes)
+      scale      <-
         case enc of
           DIRECT ->
             liftEither (decodeIntegerRLEv1 scaleBytes)
@@ -389,19 +389,36 @@ decodeColumnPart typs = do
 
       return $ Decimal words scale
 
-    (TIMESTAMP, enc) -> do
-      _ <- popStream
-      _ <- popStream
-      pure $ UnhandleColumn TIMESTAMP enc
+    (TIMESTAMP, DIRECT) -> do
+      secondsBytes <- popStream
+      _nanoBytes   <- popStream
+      Timestamp <$> liftEither (decodeIntegerRLEv1 secondsBytes)
 
-    (DATE, enc) -> do
-      _ <- popStream
-      pure $ UnhandleColumn DATE enc
+    (TIMESTAMP, _) -> do
+      secondsBytes <- popStream
+      _nanoBytes   <- popStream
+      Timestamp <$> liftEither (decodeIntegerRLEv2 secondsBytes)
+
+    (DATE, DIRECT) -> do
+      dataBytes <- popStream
+      Date <$> liftEither (decodeIntegerRLEv1 dataBytes)
+
+    (DATE, _) -> do
+      dataBytes <- popStream
+      Date <$> liftEither (decodeIntegerRLEv2 dataBytes)
 
     (BINARY, enc) -> do
-      _ <- popStream
-      _ <- popStream
-      pure $ UnhandleColumn BINARY enc
+      dataBytes   <- popStream
+      lengthBytes <- popStream
+
+      lengths <-
+        case enc of
+          DIRECT_V2 ->
+            liftEither (decodeIntegerRLEv2 lengthBytes)
+          _ ->
+            liftEither (decodeIntegerRLEv1 lengthBytes)
+
+      pure $ Binary dataBytes lengths
 
     (STRUCT fields, _) ->
       nestedColumn $
