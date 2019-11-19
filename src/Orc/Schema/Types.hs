@@ -31,7 +31,6 @@ import           Data.Word
 import           Data.ProtocolBuffers
 import           Data.Text (Text)
 import           GHC.Generics (Generic)
-import           Data.Monoid
 import           Data.Traversable (for)
 
 import           Control.Monad.Trans.State (state, runState)

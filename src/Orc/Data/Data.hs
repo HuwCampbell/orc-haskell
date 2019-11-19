@@ -17,7 +17,6 @@ module Orc.Data.Data (
 import           Control.Monad.Except
 
 import           Data.Word (Word32)
-import           Data.String (String)
 import qualified Data.Vector as Boxed
 import           P
 

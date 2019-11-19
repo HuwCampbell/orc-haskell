@@ -9,8 +9,6 @@ import Data.Word
 import Data.ProtocolBuffers
 import Data.Text
 import GHC.Generics (Generic)
-import GHC.TypeLits
-import Data.Monoid
 
 data CompressionKind
   = NONE

@@ -27,18 +27,22 @@ library
   exposed-modules:
                        Orc.Data.Data
                        Orc.Data.Segmented
-                       Orc.Data.Striped
-                       Orc.Encodings.Bytes
-                       Orc.Encodings.Compression
-                       Orc.Encodings.Primitives
-                       Orc.Encodings.Integers
+
                        Orc.Schema.Protobuf.Definitions
                        Orc.Schema.Types
-                       Orc.Seek
 
-                       Yolo
+                       Orc.Serial.Encodings.Bytes
+                       Orc.Serial.Encodings.Compression
+                       Orc.Serial.Encodings.Primitives
+                       Orc.Serial.Encodings.Integers
 
-                       Viking.Stream.Cereal
+                       Orc.Serial.Logical
+                       Orc.Serial.Seek
+
+                       Orc.Table.Logical
+                       Orc.Table.Striped
+
+                       Orc.X.Vector.Segment
 
   build-depends:       base                            >= 3          && < 5
                      , ambiata-anemone
