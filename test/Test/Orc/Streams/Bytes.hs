@@ -19,7 +19,7 @@ import           P
 
 import           System.IO (IO)
 
-import           Orc.Encodings.Bytes
+import           Orc.Serial.Encodings.Bytes
 
 
 prop_roundTripBytes :: Property

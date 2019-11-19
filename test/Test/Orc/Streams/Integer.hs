@@ -19,7 +19,7 @@ import           P
 
 import           System.IO (IO)
 
-import           Orc.Encodings.Integers
+import           Orc.Serial.Encodings.Integers
 
 
 prop_roundTripBase128Varint :: Property
