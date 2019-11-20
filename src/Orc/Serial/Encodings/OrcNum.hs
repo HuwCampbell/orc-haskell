@@ -4,18 +4,14 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE FlexibleContexts       #-}
-module Orc.Serial.Encodings.Primitives (
-    zigZag64
+module Orc.Serial.Encodings.OrcNum (
+    OrcNum (..)
+
+  , zigZag64
   , unZigZag64
-
-  , getWordBe
-  , getWord24le
-
-  , OrcNum (..)
 ) where
 
 import           Data.Bits (Bits, shiftL, shiftR, xor, (.&.), (.|.))
-import qualified Data.ByteString.Unsafe as Unsafe
 import           Data.Int (Int8, Int16, Int32, Int64)
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
@@ -23,6 +19,7 @@ import           Data.Word (Word8, Word16, Word32, Word64)
 import           Data.WideWord (Int128, Word128)
 
 import           P
+
 
 
 -- |
@@ -182,28 +179,3 @@ unZigZag128 :: Word128 -> Int128
 unZigZag128 !n =
   fromIntegral $! (n `shiftR` 1) `xor` negate (n .&. 0x1)
 {-# INLINE unZigZag128 #-}
-
--- | Read a Word64 in big endian format given its size in bits
-getWordBe :: forall i. OrcNum i => Word8 -> Get i
-getWordBe n =
-  let
-    go :: OrcWord i -> Word8 -> Get (OrcWord i)
-    go acc m
-      | m <= 0
-      = return acc
-      | otherwise
-      = do next <- fromIntegral <$> Get.getWord8
-           go ((acc `shiftL` 8) .|. next) (m - 1)
-  in
-    unZigZag <$> go 0 n
-{-# INLINE getWordBe #-}
-
-
-getWord24le :: Get Word32
-getWord24le = do
-  s <- Get.getBytes 3
-  return $!
-    (fromIntegral (s `Unsafe.unsafeIndex` 2) `shiftL` 16) .|.
-    (fromIntegral (s `Unsafe.unsafeIndex` 1) `shiftL`  8) .|.
-    (fromIntegral (s `Unsafe.unsafeIndex` 0))
-{-# INLINE getWord24le #-}

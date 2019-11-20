@@ -11,44 +11,17 @@ module Orc.Serial.Logical (
   , streamLogical
 ) where
 
+import           Control.Monad.State (runState, put, get)
 
-import           Control.Monad.IO.Class
-import           Control.Monad.Except (MonadError, liftEither, throwError)
-import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, modify')
-import           Control.Monad.Reader (ReaderT (..), runReaderT, ask)
-import           Control.Monad.Trans.Class (lift)
-import           Control.Monad.Trans.Control (MonadTransControl (..))
-import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
-import           Control.Monad.Trans.Resource (MonadResource (..), allocate)
-
-import qualified Data.Serialize.Get as Get
-
-import           Data.List (dropWhile)
-import           Data.Word (Word64)
-
-import           Data.String (String)
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as ByteString
-
-import qualified Data.Vector.Storable as Storable
-
-
-import           Viking (Of (..), ByteStream)
+import           Viking (Of (..))
 import qualified Viking.Stream as Viking
-import qualified Viking.ByteStream as ByteStream
 
-import           Orc.Data.Segmented
-import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed, prevIndex)
+import           Orc.Data.Data (StructField (..))
 import           Orc.Schema.Types as Orc
-import           Orc.Serial.Encodings.Bytes
-import           Orc.Serial.Encodings.Compression
-import           Orc.Serial.Encodings.Integers
 
 import qualified Orc.Table.Striped as Striped
 import           Orc.Table.Logical as Logical
 import           Orc.X.Vector.Segment as Segment
-
-import           System.IO as IO
 
 import           P
 
@@ -58,8 +31,8 @@ streamLogical
   :: Monad m
   => Viking.Stream (Of (StripeInformation, Striped.Column)) m x
   -> Viking.Stream (Of Logical.Row) m x
-streamLogical stripes =
-  Viking.for stripes $
+streamLogical ss =
+  Viking.for ss $
     Viking.each . uncurry toLogical
 
 
@@ -158,6 +131,13 @@ toLogical stripeInfo column =
       in
         fmap Logical.Date boxed
 
+    Striped.Timestamp x ->
+      let
+        boxed =
+          Boxed.convert x
+      in
+        fmap Logical.Timestamp boxed
+
     Striped.Float x ->
       let
         boxed =
@@ -185,8 +165,49 @@ toLogical stripeInfo column =
       fmap Logical.Binary x
 
     -- Actually implement this.
-    Striped.Partial _ ha ->
-      toLogical stripeInfo ha
+    Striped.Partial present values ->
+      let
+        activeRows =
+          toLogical stripeInfo values
+
+        boxed =
+          Boxed.convert present
+
+        taken =
+          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) $ siNumberOfRows stripeInfo
+
+      in
+        fmap Logical.Partial $
+          fst $ flip runState 0 $
+            Boxed.forM taken $ \here ->
+              if here then do
+                current <- get
+                let
+                  value = activeRows Boxed.! current
+                put $ current + 1
+                pure (Just value)
+              else
+                pure Nothing
+
+    -- Actually implement this.
+    Striped.Union tags variants ->
+      let
+        variantRows =
+          Boxed.map (toLogical stripeInfo) variants
+
+        indicies =
+          Boxed.map (const 0) variants
+
+      in
+        fmap (uncurry Logical.Union) $
+          fst $ flip runState indicies $
+            Boxed.forM (Boxed.convert tags) $ \tag -> do
+              current <- get
+              let
+                rowIndex = current Boxed.! (fromIntegral tag)
+
+              put $ current Boxed.// [(fromIntegral tag, rowIndex + 1)]
+              pure $ (tag, (variantRows Boxed.! (fromIntegral tag)) Boxed.! rowIndex)
 
 
 (...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d

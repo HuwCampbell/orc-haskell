@@ -49,7 +49,8 @@ import qualified Data.Vector.Storable.Mutable as Mutable
 import           Foreign (Storable (..), mallocForeignPtrArray, withForeignPtr, plusPtr)
 import           Foreign.Ptr (Ptr)
 
-import           Orc.Serial.Encodings.Primitives
+import qualified Orc.Serial.Encodings.Get as Get
+import           Orc.Serial.Encodings.OrcNum
 
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
@@ -304,7 +305,7 @@ getShortRepeat = do
     repeats =
       (header .&. 0x07) + 3
   value <-
-    getWordBe width
+    Get.getOrcNumBe width
   return $
     Storable.replicate (fromIntegral repeats) value
 
@@ -367,8 +368,7 @@ getPatchedBase = do
         header .&. 0x000001F
 
   baseValue <-
-    -- TODO, negate based on most significant bit
-    getWordBe baseWidth
+    Get.getOrcNumBePatchedBase baseWidth
 
   dataBytes <-
     Get.getByteString (ceiling ((repeats * width) % 8))

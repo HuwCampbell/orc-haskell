@@ -33,8 +33,9 @@ library
 
                        Orc.Serial.Encodings.Bytes
                        Orc.Serial.Encodings.Compression
-                       Orc.Serial.Encodings.Primitives
+                       Orc.Serial.Encodings.Get
                        Orc.Serial.Encodings.Integers
+                       Orc.Serial.Encodings.OrcNum
 
                        Orc.Serial.Logical
                        Orc.Serial.Seek

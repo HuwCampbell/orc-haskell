@@ -28,7 +28,7 @@ prop_roundTripBytes =
     x <-
       forAll $
         Gen.list
-          (Range.linear 1 1000)
+          (Range.linear 0 1000)
           (Gen.word8 (Range.linearFrom 0 0 maxBound))
 
     tripping (Storable.fromList x) encodeBytes decodeBytes

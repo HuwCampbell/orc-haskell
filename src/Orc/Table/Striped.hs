@@ -16,7 +16,7 @@ import qualified X.Data.Vector.Storable as Storable
 data Column
   -- Composite Columns
   = Struct    !(Boxed.Vector (StructField Column))
-  | Union     !(Storable.Vector Word8) ![Column]
+  | Union     !(Storable.Vector Word8) !(Boxed.Vector Column)
   | List      !(Storable.Vector Word32) !Column
   | Map       !(Storable.Vector Word32) !Column !Column
 

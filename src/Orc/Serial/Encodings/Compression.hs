@@ -9,6 +9,7 @@ module Orc.Serial.Encodings.Compression (
 
 import           Control.Exception (tryJust, evaluate)
 
+import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 
 import           Data.String (String)
@@ -17,7 +18,7 @@ import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Lazy as Lazy
 
 import           Orc.Schema.Types as Orc
-import           Orc.Serial.Encodings.Primitives
+import qualified Orc.Serial.Encodings.Get as Get
 
 import           System.IO.Unsafe as Unsafe
 
@@ -37,7 +38,7 @@ readCompressedStream = \case
     Right
   Just SNAPPY ->
     \bytes -> do
-      header <- Get.runGet getWord24le bytes
+      header <- Get.runGet Get.getWord24le bytes
       let
         (len, isOriginal) =
           header `divMod` 2
@@ -52,7 +53,7 @@ readCompressedStream = \case
 
   Just ZLIB ->
     \bytes -> do
-      header <- Get.runGet getWord24le bytes
+      header <- Get.runGet Get.getWord24le bytes
       let
         (len, isOriginal) =
           header `divMod` 2

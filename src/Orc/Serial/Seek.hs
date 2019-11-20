@@ -418,7 +418,8 @@ decodeColumnPart typs = do
 
       nestedColumn $ do
         decodedFields <-
-          for fields decodeColumn
+          fmap Boxed.fromList $
+            for fields decodeColumn
 
         pure $
           Union tags decodedFields
