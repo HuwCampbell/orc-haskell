@@ -485,78 +485,56 @@ decodeColumnPart typs = do
 
 decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
 decodeString = \case
-  DIRECT -> do
-    dataBytes   <- popStream
-    lengthBytes <- popStream
-    lengths <-
-      liftEither (decodeIntegerRLEv1 lengthBytes)
+  DIRECT ->
+    decodeStringDirect decodeIntegerRLEv1
 
-    return $!
-      bytesOfSegmented $!
-        splitByteString lengths dataBytes
+  DICTIONARY ->
+    decodeStringDictionary decodeIntegerRLEv1
 
-  DICTIONARY -> do
-    dataBytes       <- popStream
-    -- Specification appears to be incorrect here
-    -- Length bytes comes before dictionary bytes
-    lengthBytes     <- popStream
-    dictionaryBytes <- popStream
+  DIRECT_V2 ->
+    decodeStringDirect decodeIntegerRLEv2
 
-    selections :: Storable.Vector Word64 <-
-      liftEither $
-        decodeIntegerRLEv1 dataBytes
+  DICTIONARY_V2 ->
+    decodeStringDictionary decodeIntegerRLEv2
 
-    lengths :: Storable.Vector Word64 <-
-      liftEither $
-        decodeIntegerRLEv1 lengthBytes
 
-    let
-      dictionary =
-        Boxed.convert . bytesOfSegmented $
-          splitByteString lengths dictionaryBytes
+decodeStringDirect :: Monad m => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode m (Boxed.Vector ByteString)
+decodeStringDirect decodeIntegerFunc = do
+  dataBytes   <- popStream
+  lengthBytes <- popStream
+  lengths <-
+    liftEither (decodeIntegerFunc lengthBytes)
 
-      discovered =
-        Boxed.map (\i -> fromMaybe "" (dictionary Boxed.!? (fromIntegral i))) $
-          Boxed.convert selections
+  return $!
+    bytesOfSegmented $!
+      splitByteString lengths dataBytes
 
-    return $!
-      discovered
 
-  DIRECT_V2 -> do
-    dataBytes   <- popStream
-    lengthBytes <- popStream
+decodeStringDictionary :: Monad m => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode m (Boxed.Vector ByteString)
+decodeStringDictionary decodeIntegerFunc = do
+  dataBytes       <- popStream
+  -- Specification appears to be incorrect here
+  -- Length bytes comes before dictionary bytes
+  lengthBytes     <- popStream
+  dictionaryBytes <- popStream
 
-    lengths <-
-      liftEither (decodeIntegerRLEv2 lengthBytes)
+  selections :: Storable.Vector Word64 <-
+    liftEither (decodeIntegerFunc dataBytes)
 
-    return $!
-      bytesOfSegmented $!
-        splitByteString lengths dataBytes
+  lengths :: Storable.Vector Word64 <-
+    liftEither (decodeIntegerFunc lengthBytes)
 
-  DICTIONARY_V2 -> do
-    dataBytes       <- popStream
-    -- Specification appears to be incorrect here
-    -- Length bytes comes before dictionary bytes
-    lengthBytes     <- popStream
-    dictionaryBytes <- popStream
+  let
+    dictionary =
+      Boxed.convert . bytesOfSegmented $
+        splitByteString lengths dictionaryBytes
 
-    selections :: Storable.Vector Word64 <-
-      liftEither (decodeIntegerRLEv2 dataBytes)
+    discovered =
+      Boxed.map (\i -> fromMaybe "" (dictionary Boxed.!? (fromIntegral i))) $
+        Boxed.convert selections
 
-    lengths :: Storable.Vector Word64 <-
-      liftEither (decodeIntegerRLEv2 lengthBytes)
-
-    let
-      dictionary =
-        Boxed.convert . bytesOfSegmented $
-          splitByteString lengths dictionaryBytes
-
-      discovered =
-        Boxed.map (\i -> fromMaybe "" (dictionary Boxed.!? (fromIntegral i))) $
-          Boxed.convert selections
-
-    return $
-      discovered
+  return $
+    discovered
 
 
 decodeStruct :: Monad m => [StructField Type] -> OrcDecode m Column
