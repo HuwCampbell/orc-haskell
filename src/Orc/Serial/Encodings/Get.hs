@@ -52,7 +52,7 @@ getOrcNumBe n =
 --   significant bit set. If it that bit is set, the entire
 --   value is negated.
 --
---   Don't know why they just zigzag like Short Repeat.
+--   Don't know why they didn't just zigzag like Short Repeat.
 getOrcNumBePatchedBase :: forall i. OrcNum i => Word8 -> Get i
 getOrcNumBePatchedBase n = do
   allBytes <- Get.getBytes (fromIntegral n)

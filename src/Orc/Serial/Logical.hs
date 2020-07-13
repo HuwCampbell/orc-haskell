@@ -27,6 +27,7 @@ import           P
 
 import qualified X.Data.Vector as Boxed
 
+
 streamLogical
   :: Monad m
   => Viking.Stream (Of (StripeInformation, Striped.Column)) m x
@@ -164,7 +165,6 @@ toLogical stripeInfo column =
     Striped.Binary x ->
       fmap Logical.Binary x
 
-    -- Actually implement this.
     Striped.Partial present values ->
       let
         activeRows =
@@ -185,11 +185,10 @@ toLogical stripeInfo column =
                 let
                   value = activeRows Boxed.! current
                 put $ current + 1
-                pure (Just value)
+                pure (Just' value)
               else
-                pure Nothing
+                pure Nothing'
 
-    -- Actually implement this.
     Striped.Union tags variants ->
       let
         variantRows =

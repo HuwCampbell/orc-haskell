@@ -7,6 +7,8 @@
 module Orc.Serial.Seek (
     openOrcFile
   , checkOrcFile
+
+  , printOrcFile
 ) where
 
 import           Control.Monad.IO.Class
@@ -15,8 +17,8 @@ import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, 
 import           Control.Monad.Reader (ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
-import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
-import           Control.Monad.Trans.Resource (MonadResource (..), allocate)
+import           Control.Monad.Trans.Either (EitherT, newEitherT, left, runEitherT)
+import           Control.Monad.Trans.Resource (MonadResource (..), runResourceT, allocate)
 
 import qualified Data.Serialize.Get as Get
 
@@ -26,6 +28,7 @@ import           Data.Word (Word64)
 import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
+import qualified Data.Text as Text
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
@@ -40,7 +43,9 @@ import           Orc.Schema.Types as Orc
 import           Orc.Serial.Encodings.Bytes
 import           Orc.Serial.Encodings.Compression
 import           Orc.Serial.Encodings.Integers
+import           Orc.Serial.Logical (streamLogical)
 import           Orc.Table.Striped (Column (..))
+import           Orc.Table.Logical (ppRow)
 
 import           System.IO as IO
 
@@ -72,6 +77,22 @@ checkOrcFile file =
         types footer
 
     return (stripeInfos, typeInfo, (compression postScript))
+
+
+printOrcFile :: FilePath -> IO ()
+printOrcFile fp = do
+  res <-
+    runResourceT $
+      runEitherT $ do
+        Viking.stdoutLn $
+          Viking.take 10 $
+          Viking.map (Text.unpack . ppRow) $
+            streamLogical $
+              openOrcFile fp
+
+  case res of
+    Right () -> putStrLn "Done"
+    Left err -> putStrLn err
 
 
 openOrcFile :: MonadResource m => FilePath -> Viking.Stream (Of (StripeInformation, Column)) (EitherT String m) ()
@@ -168,12 +189,11 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     liftMaybe "Required Field Missing"
       (siFooterLength stripeInfo)
 
-  rowIndexData <-
-    newEitherT $ readCompressedStream mCompressionInfo <$> liftIO (ByteString.hGet handle $ fromIntegral riLength)
-
-  _rowIndex <-
-    liftEither $
-      readRowIndex rowIndexData
+  --
+  -- Jump over the row index streams.
+  -- These are only really useful when doing filtering statistics, or skipping.
+  liftIO $
+    hSeek handle RelativeSeek (fromIntegral riLength)
 
   --
   -- One could read dataBytes into a Strict ByteString here (as that's the order in the file),
@@ -477,6 +497,8 @@ decodeString = \case
 
   DICTIONARY -> do
     dataBytes       <- popStream
+    -- Specification appears to be incorrect here
+    -- Length bytes comes before dictionary bytes
     lengthBytes     <- popStream
     dictionaryBytes <- popStream
 

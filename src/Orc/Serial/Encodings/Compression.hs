@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE DoAndIfThenElse     #-}
 
 module Orc.Serial.Encodings.Compression (
     readCompressedStream
@@ -9,7 +10,6 @@ module Orc.Serial.Encodings.Compression (
 
 import           Control.Exception (tryJust, evaluate)
 
-import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 
 import           Data.String (String)
@@ -37,37 +37,9 @@ readCompressedStream = \case
   Just NONE ->
     Right
   Just SNAPPY ->
-    \bytes -> do
-      header <- Get.runGet Get.getWord24le bytes
-      let
-        (len, isOriginal) =
-          header `divMod` 2
-
-        pertinent =
-          ByteString.take (fromIntegral len) $
-            ByteString.drop 3 bytes
-
-      if isOriginal == 1 then pure pertinent else
-        note "Snappy decompression failed." $
-          Snapper.decompress pertinent
-
+    readSnappyParts
   Just ZLIB ->
-    \bytes -> do
-      header <- Get.runGet Get.getWord24le bytes
-      let
-        (len, isOriginal) =
-          header `divMod` 2
-
-        pertinent =
-          ByteString.take (fromIntegral len) $
-            ByteString.drop 3 bytes
-
-      if isOriginal == 1 then pure pertinent else
-        Unsafe.unsafePerformIO $
-          tryJust
-            (\(e :: DecompressError) -> Just ("DEFLATE decompression failed with " <> show e))
-            (evaluate (overLazy Zlib.decompress pertinent))
-
+    readZlibParts
   Just u ->
     const (Left $ "Unsupported Compression Kind: " <> show u)
 
@@ -79,3 +51,51 @@ note x = maybe (Left x) Right
 overLazy :: (Lazy.ByteString -> Lazy.ByteString) -> ByteString -> ByteString
 overLazy f =
   Lazy.toStrict . f . Lazy.fromStrict
+
+
+readSnappyParts :: ByteString -> Either String ByteString
+readSnappyParts bytes
+  | ByteString.null bytes
+  = Right ByteString.empty
+readSnappyParts bytes = do
+  header <- Get.runGet Get.getWord24le bytes
+  let
+    (len, isOriginal) =
+      header `divMod` 2
+
+    (pertinent, remaining) =
+      ByteString.splitAt (fromIntegral len) $
+        ByteString.drop 3 bytes
+
+  thisRound <-
+    if isOriginal == 1 then pure pertinent else
+      note "Snappy decompression failed." $
+        Snapper.decompress pertinent
+
+  fmap (thisRound <>) $
+    readSnappyParts remaining
+
+
+readZlibParts :: ByteString -> Either String ByteString
+readZlibParts bytes
+  | ByteString.null bytes
+  = Right ByteString.empty
+readZlibParts bytes = do
+  header <- Get.runGet Get.getWord24le bytes
+  let
+    (len, isOriginal) =
+      header `divMod` 2
+
+    (pertinent, remaining) =
+      ByteString.splitAt (fromIntegral len) $
+        ByteString.drop 3 bytes
+
+  thisRound <-
+    if isOriginal == 1 then pure pertinent else
+      Unsafe.unsafePerformIO $
+        tryJust
+          (\(e :: DecompressError) -> Just ("DEFLATE decompression failed with " <> show e))
+          (evaluate (overLazy Zlib.decompress pertinent))
+
+  fmap (thisRound <>) $
+    readZlibParts remaining

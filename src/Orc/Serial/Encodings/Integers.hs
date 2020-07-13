@@ -41,7 +41,6 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
 import           Data.Word (Word8, Word64)
 import           Data.String (String)
-import           Data.Ratio ((%))
 
 import qualified Data.Vector.Storable as Storable
 import qualified Data.Vector.Storable.Mutable as Mutable
@@ -328,7 +327,8 @@ getDirect = do
       repeats * width
 
   dataBytes <-
-    Get.label ("want: " <> show header) $
+    Get.label ("width: " <> show width) $
+    Get.label ("repeats: " <> show repeats) $
       Get.getByteString (ceiling (required % 8))
 
   return $

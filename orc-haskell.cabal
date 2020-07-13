@@ -54,7 +54,7 @@ library
                      , bytestring
                      , cereal
                      , exceptions                      >= 0.10
-                     , decimal-arithmetic
+                    --  , decimal-arithmetic
                      , mtl
                      , mmorph                          >= 1.0        && < 1.2
                      , monad-control                   == 1.0.*
