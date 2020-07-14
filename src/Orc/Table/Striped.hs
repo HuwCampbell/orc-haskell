@@ -10,8 +10,8 @@ import           Data.WideWord (Int128)
 
 import           Orc.Data.Data
 
-import qualified X.Data.Vector as Boxed
-import qualified X.Data.Vector.Storable as Storable
+import qualified Data.Vector as Boxed
+import qualified Data.Vector.Storable as Storable
 
 data Column
   -- Composite Columns

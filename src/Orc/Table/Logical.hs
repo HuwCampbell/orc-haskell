@@ -20,7 +20,7 @@ import qualified Data.Vector as Vector
 
 
 import           Orc.Data.Data
-import qualified X.Data.Vector as Boxed
+import qualified Data.Vector as Boxed
 
 data Row
   -- Composite Columns

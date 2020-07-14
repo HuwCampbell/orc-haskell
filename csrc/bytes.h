@@ -1,8 +1,7 @@
 #ifndef __ORC_BYTES_H
 #define __ORC_BYTES_H
 
-#include "anemone_base.h"
-#include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 
 // ------------------------

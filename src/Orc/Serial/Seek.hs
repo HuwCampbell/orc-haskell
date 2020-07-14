@@ -33,9 +33,10 @@ import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
 
-import           Viking (Of (..), ByteStream)
-import qualified Viking.Stream as Viking
-import qualified Viking.ByteStream as ByteStream
+import           Streaming (Of (..))
+import qualified Streaming as Streaming
+import qualified Streaming.Prelude as Streaming
+import qualified Data.ByteString.Streaming as ByteStream
 
 import           Orc.Data.Segmented
 import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed, prevIndex)
@@ -52,6 +53,7 @@ import           System.IO as IO
 
 import           P
 
+type ByteStream = ByteStream.ByteString
 
 withFileLifted
   :: (Monad (t IO), MonadTransControl t)
@@ -85,9 +87,9 @@ printOrcFile fp = do
   res <-
     runResourceT $
       runEitherT $ do
-        Viking.stdoutLn $
-          Viking.take 10 $
-          Viking.map (Text.unpack . ppRow) $
+        Streaming.stdoutLn $
+          Streaming.take 10 $
+          Streaming.map (Text.unpack . ppRow) $
             streamLogical $
               openOrcFile fp
 
@@ -96,9 +98,9 @@ printOrcFile fp = do
     Left err -> putStrLn err
 
 
-openOrcFile :: MonadResource m => FilePath -> Viking.Stream (Of (StripeInformation, Column)) (EitherT String m) ()
+openOrcFile :: MonadResource m => FilePath -> Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()
 openOrcFile file =
-  Viking.effect $ do
+  Streaming.effect $ do
     (_, handle) <-
       allocate (openFile file ReadMode) hClose
 
@@ -113,9 +115,9 @@ openOrcFile file =
         types footer
 
     return $
-      Viking.mapM
+      Streaming.mapM
         (readStripe typeInfo (compression postScript) handle)
-        (Viking.each stripeInfos)
+        (Streaming.each stripeInfos)
 
 
 

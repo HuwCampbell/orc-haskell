@@ -44,13 +44,11 @@ library
                        Orc.Table.Striped
 
                        Orc.X.Vector.Segment
+                       Orc.X.Vector.Transpose
 
   build-depends:       base                            >= 3          && < 5
-                     , ambiata-anemone
                      , ambiata-p
                      , ambiata-snapper
-                     , ambiata-x-vector
-                     , ambiata-viking
                      , bytestring
                      , cereal
                      , Decimal
@@ -92,10 +90,12 @@ test-suite test
   hs-source-dirs:
                        test
 
+  other-modules:       Test.Orc.Streams.Bytes
+                       Test.Orc.Streams.Integer
+
   build-depends:
                        base                            >= 3          && < 5
                      , ambiata-p
-                     , ambiata-viking
                      , orc-haskell
                      , cereal
                      , bytestring

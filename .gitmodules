@@ -1,18 +1,6 @@
-[submodule "lib/viking"]
-	path = lib/viking
-	url = git@github.com:icicle-lang/viking.git
 [submodule "lib/p"]
 	path = lib/p
 	url = git@github.com:icicle-lang/p.git
-[submodule "lib/x"]
-	path = lib/x
-	url = git@github.com:icicle-lang/x.git
-[submodule "lib/disorder.hs"]
-	path = lib/disorder.hs
-	url = git@github.com:icicle-lang/disorder.git
-[submodule "lib/anemone"]
-	path = lib/anemone
-	url = git@github.com:icicle-lang/anemone.git
 [submodule "lib/snapper"]
 	path = lib/snapper
 	url = git@github.com:icicle-lang/snapper.git

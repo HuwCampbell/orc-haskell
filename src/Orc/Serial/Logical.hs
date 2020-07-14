@@ -13,8 +13,8 @@ module Orc.Serial.Logical (
 
 import           Control.Monad.State (runState, put, get)
 
-import           Viking (Of (..))
-import qualified Viking.Stream as Viking
+import           Streaming (Of (..))
+import qualified Streaming.Prelude as Streaming
 
 import           Orc.Data.Data (StructField (..))
 import           Orc.Schema.Types as Orc
@@ -22,19 +22,20 @@ import           Orc.Schema.Types as Orc
 import qualified Orc.Table.Striped as Striped
 import           Orc.Table.Logical as Logical
 import           Orc.X.Vector.Segment as Segment
+import           Orc.X.Vector.Transpose (transpose)
 
 import           P
 
-import qualified X.Data.Vector as Boxed
+import qualified Data.Vector as Boxed
 
 
 streamLogical
   :: Monad m
-  => Viking.Stream (Of (StripeInformation, Striped.Column)) m x
-  -> Viking.Stream (Of Logical.Row) m x
+  => Streaming.Stream (Of (StripeInformation, Striped.Column)) m x
+  -> Streaming.Stream (Of Logical.Row) m x
 streamLogical ss =
-  Viking.for ss $
-    Viking.each . uncurry toLogical
+  Streaming.for ss $
+    Streaming.each . uncurry toLogical
 
 
 toLogical :: StripeInformation -> Striped.Column -> Boxed.Vector Logical.Row
@@ -46,7 +47,7 @@ toLogical stripeInfo column =
           Boxed.map (toLogical stripeInfo . fieldValue) cols
 
         transposed =
-          Boxed.transpose logicals
+          transpose logicals
 
         asFields =
           Boxed.map (Boxed.zipWith (\(StructField n _) r -> StructField n r) cols) transposed
