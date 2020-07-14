@@ -10,15 +10,19 @@ module Orc.Table.Logical (
 import           P
 
 import           Data.ByteString (ByteString)
+import           Data.Char (ord)
 import           Data.Decimal (Decimal)
 import           Data.Word (Word8)
 import           Data.WideWord (Int128)
 import qualified Data.List as List
 import qualified Data.ByteString.Lazy as Lazy
+import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Builder.Prim as Prim
+import           Data.ByteString.Builder.Prim ((>*<), (>$<))
 import qualified Data.Vector as Vector
 import qualified Data.Text as Text
-
+import           Data.Text.Encoding (encodeUtf8BuilderEscaped)
 
 import           Orc.Data.Data
 import qualified Data.Vector as Boxed
@@ -69,8 +73,8 @@ buildRow = \case
     in
       Builder.char8 '{' <> fields fs <> Builder.char8 '}'
 
-  Union i r ->
-    Builder.word8Dec i <> (Builder.byteString ": ") <> buildRow r
+  Union _ r ->
+    buildRow r
 
   List rs ->
     let
@@ -85,8 +89,7 @@ buildRow = \case
       Builder.char8 '{' <> vals rs <> Builder.char8 '}'
 
   Bool b ->
-    Builder.char8 $
-      if b then 'T' else 'F'
+    bool_ b
 
   Bytes b ->
     Builder.word8Dec b
@@ -101,7 +104,7 @@ buildRow = \case
     Builder.int64Dec b
 
   Decimal b ->
-    Builder.stringUtf8 $
+    Builder.string8 $
       show b
 
   Date b ->
@@ -117,24 +120,89 @@ buildRow = \case
     Builder.doubleDec b
 
   String b ->
-    Builder.byteString b
+    quoteBytes b
 
   Char b ->
-    Builder.byteString b
+    quoteBytes b
 
   VarChar b ->
-    Builder.byteString b
+    quoteBytes b
 
   Binary b ->
-    Builder.byteString b
+    quoteBytes b
 
   Partial mv ->
-    maybe' (Builder.byteString "null") buildRow mv
+    maybe' (null_) buildRow mv
+
 
 buildField :: StructField Row -> Builder.Builder
 buildField (StructField (StructFieldName n) r) =
-  Builder.stringUtf8 (Text.unpack n) <> Builder.byteString ": " <> buildRow r
+  text n <> colonSpace <> buildRow r
+
 
 buildMap :: (Row,Row) -> Builder.Builder
 buildMap (k, v) =
-  buildRow k <> Builder.byteString ": " <> buildRow v
+  buildRow k <> colonSpace <> buildRow v
+
+
+colonSpace :: Builder
+colonSpace = Prim.primBounded (ascii2 (':', ' ')) ()
+
+-- | Encode a JSON null.
+null_ :: Builder
+null_ = Prim.primBounded (ascii4 ('n',('u',('l','l')))) ()
+
+-- | Encode a JSON boolean.
+bool_ :: Bool -> Builder
+bool_ = Prim.primBounded (Prim.condB id (ascii4 ('t',('r',('u','e'))))
+                                        (ascii5 ('f',('a',('l',('s','e'))))))
+
+
+
+ascii2 :: (Char, Char) -> Prim.BoundedPrim a
+ascii2 cs = Prim.liftFixedToBounded $ const cs >$< Prim.char7 >*< Prim.char7
+{-# INLINE ascii2 #-}
+
+ascii4 :: (Char, (Char, (Char, Char))) -> Prim.BoundedPrim a
+ascii4 cs = Prim.liftFixedToBounded $ const cs >$<
+    Prim.char7 >*< Prim.char7 >*< Prim.char7 >*< Prim.char7
+{-# INLINE ascii4 #-}
+
+ascii5 :: (Char, (Char, (Char, (Char, Char)))) -> Prim.BoundedPrim a
+ascii5 cs = Prim.liftFixedToBounded $ const cs >$<
+    Prim.char7 >*< Prim.char7 >*< Prim.char7 >*< Prim.char7 >*< Prim.char7
+{-# INLINE ascii5 #-}
+
+quoteBytes :: ByteString -> Builder
+quoteBytes t = Builder.char8 '"' <> unquotedBytes t <> Builder.char8 '"'
+
+-- | Encode a JSON string.
+text :: Text -> Builder
+text t = Builder.char8 '"' <> unquoted t <> Builder.char8 '"'
+
+-- | Encode a JSON string, without enclosing quotes.
+unquotedBytes :: ByteString -> Builder
+unquotedBytes = Prim.primMapByteStringBounded escapeAscii
+
+-- | Encode a JSON string, without enclosing quotes.
+unquoted :: Text -> Builder
+unquoted = encodeUtf8BuilderEscaped escapeAscii
+
+escapeAscii :: Prim.BoundedPrim Word8
+escapeAscii =
+    Prim.condB (== c2w '\\'  ) (ascii2 ('\\','\\')) $
+    Prim.condB (== c2w '\"'  ) (ascii2 ('\\','"' )) $
+    Prim.condB (>= c2w '\x20') (Prim.liftFixedToBounded Prim.word8) $
+    Prim.condB (== c2w '\n'  ) (ascii2 ('\\','n' )) $
+    Prim.condB (== c2w '\r'  ) (ascii2 ('\\','r' )) $
+    Prim.condB (== c2w '\t'  ) (ascii2 ('\\','t' )) $
+    Prim.liftFixedToBounded hexEscape -- fallback for chars < 0x20
+  where
+    hexEscape :: Prim.FixedPrim Word8
+    hexEscape = (\c -> ('\\', ('u', fromIntegral c))) >$<
+        Prim.char8 >*< Prim.char8 >*< Prim.word16HexFixed
+{-# INLINE escapeAscii #-}
+
+c2w :: Char -> Word8
+c2w c = fromIntegral (ord c)
+{-# INLINE c2w #-}
