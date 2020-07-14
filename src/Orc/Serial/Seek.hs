@@ -43,6 +43,7 @@ import           Orc.Schema.Types as Orc
 import           Orc.Serial.Encodings.Bytes
 import           Orc.Serial.Encodings.Compression
 import           Orc.Serial.Encodings.Integers
+import           Orc.Serial.Encodings.OrcNum
 import           Orc.Serial.Logical (streamLogical)
 import           Orc.Table.Striped (Column (..))
 import           Orc.Table.Logical (ppRow)
@@ -270,7 +271,7 @@ popStream = do
     get
 
   case orcStreams of
-    s:rest -> do
+    s:rest | streamColumn s == Just (currentIndex ix) -> do
       colLength <-
         liftMaybe "Need Column Length" $
           streamLength s
@@ -285,7 +286,7 @@ popStream = do
       put (ix, rest, remainingBytes)
       return $! theseBytes
 
-    _ -> throwError "No streams to pop"
+    _ -> throwError $ "No streams to pop in column: " <> show (currentIndex ix)
 
 
 incrementColumn :: Monad m => OrcDecode m ()
@@ -347,29 +348,17 @@ decodeColumnPart typs = do
       bytes          <- liftEither (decodeBytes dataBytes)
       return $ Bytes bytes
 
-    (SHORT, DIRECT) -> do
+    (SHORT, enc) -> do
       dataBytes <- popStream
-      Short <$> liftEither (decodeIntegerRLEv1 dataBytes)
+      Short <$> liftEither (decodeIntegerRLEversion enc dataBytes)
 
-    (INT, DIRECT) -> do
+    (INT, enc) -> do
       dataBytes <- popStream
-      Integer <$> liftEither (decodeIntegerRLEv1 dataBytes)
+      Integer <$> liftEither (decodeIntegerRLEversion enc dataBytes)
 
-    (LONG, DIRECT) -> do
+    (LONG, enc) -> do
       dataBytes <- popStream
-      Long <$> liftEither (decodeIntegerRLEv1 dataBytes)
-
-    (SHORT, _) -> do
-      dataBytes <- popStream
-      Short <$> liftEither (decodeIntegerRLEv2 dataBytes)
-
-    (INT, _) -> do
-      dataBytes <- popStream
-      Integer <$> liftEither (decodeIntegerRLEv2 dataBytes)
-
-    (LONG, _) -> do
-      dataBytes <- popStream
-      Long <$> liftEither (decodeIntegerRLEv2 dataBytes)
+      Long <$> liftEither (decodeIntegerRLEversion enc dataBytes)
 
     (FLOAT, _) -> do
       dataBytes <- popStream
@@ -394,32 +383,18 @@ decodeColumnPart typs = do
       dataBytes  <- popStream
       scaleBytes <- popStream
       words      <- liftEither (decodeBase128Varint dataBytes)
-      scale      <-
-        case enc of
-          DIRECT ->
-            liftEither (decodeIntegerRLEv1 scaleBytes)
-          _ ->
-            liftEither (decodeIntegerRLEv2 scaleBytes)
+      scale      <- liftEither (decodeIntegerRLEversion enc scaleBytes)
 
       return $ Decimal words scale
 
-    (TIMESTAMP, DIRECT) -> do
+    (TIMESTAMP, enc) -> do
       secondsBytes <- popStream
       _nanoBytes   <- popStream
-      Timestamp <$> liftEither (decodeIntegerRLEv1 secondsBytes)
+      Timestamp <$> liftEither (decodeIntegerRLEversion enc secondsBytes)
 
-    (TIMESTAMP, _) -> do
-      secondsBytes <- popStream
-      _nanoBytes   <- popStream
-      Timestamp <$> liftEither (decodeIntegerRLEv2 secondsBytes)
-
-    (DATE, DIRECT) -> do
+    (DATE, enc) -> do
       dataBytes <- popStream
-      Date <$> liftEither (decodeIntegerRLEv1 dataBytes)
-
-    (DATE, _) -> do
-      dataBytes <- popStream
-      Date <$> liftEither (decodeIntegerRLEv2 dataBytes)
+      Date <$> liftEither (decodeIntegerRLEversion enc dataBytes)
 
     (BINARY, encoding) ->
       Binary <$> decodeString encoding
@@ -449,11 +424,7 @@ decodeColumnPart typs = do
         popStream
 
       lengths <-
-        case enc of
-          DIRECT_V2 ->
-            liftEither (decodeIntegerRLEv2 lengthBytes)
-          _ ->
-            liftEither (decodeIntegerRLEv1 lengthBytes)
+        liftEither (decodeIntegerRLEversion enc lengthBytes)
 
       nestedColumn $ do
         internal <-
@@ -467,11 +438,7 @@ decodeColumnPart typs = do
         popStream
 
       lengths <-
-        case enc of
-          DIRECT_V2 ->
-            liftEither (decodeIntegerRLEv2 lengthBytes)
-          _ ->
-            liftEither (decodeIntegerRLEv1 lengthBytes)
+        liftEither (decodeIntegerRLEversion enc lengthBytes)
 
       nestedColumn $ do
         keys <-
@@ -498,6 +465,21 @@ decodeString = \case
     decodeStringDictionary decodeIntegerRLEv2
 
 
+decodeIntegerRLEversion :: (Storable.Storable w, OrcNum w) => Orc.ColumnEncodingKind -> ByteString ->  Either String (Storable.Vector w)
+decodeIntegerRLEversion = \case
+  DIRECT ->
+    decodeIntegerRLEv1
+
+  DICTIONARY ->
+    decodeIntegerRLEv1
+
+  DIRECT_V2 ->
+    decodeIntegerRLEv2
+
+  DICTIONARY_V2 ->
+    decodeIntegerRLEv2
+
+
 decodeStringDirect :: Monad m => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode m (Boxed.Vector ByteString)
 decodeStringDirect decodeIntegerFunc = do
   dataBytes   <- popStream
@@ -514,9 +496,11 @@ decodeStringDictionary :: Monad m => (ByteString -> Either String (Storable.Vect
 decodeStringDictionary decodeIntegerFunc = do
   dataBytes       <- popStream
   -- Specification appears to be incorrect here
-  -- Length bytes comes before dictionary bytes
-  lengthBytes     <- popStream
-  dictionaryBytes <- popStream
+  -- Length bytes comes before dictionary bytes;
+  -- and, despite these being mandatory in the spec,
+  -- there are files which do not have these streams.
+  lengthBytes     <- popStream <|> pure ByteString.empty
+  dictionaryBytes <- popStream <|> pure ByteString.empty
 
   selections :: Storable.Vector Word64 <-
     liftEither (decodeIntegerFunc dataBytes)

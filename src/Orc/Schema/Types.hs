@@ -414,7 +414,7 @@ fromStripeFooter raw =
 data Stream = Stream {
   -- if you add new index stream kinds, you need to make sure to update
   -- StreamName to ensure it is added to the stripe in the right area
-  streamKind :: Maybe Proto.StreamKind
+  streamKind   :: Maybe Proto.StreamKind
 , streamColumn :: Maybe Word32
 , streamLength :: Maybe Word64
 } deriving (Eq, Ord, Show)
