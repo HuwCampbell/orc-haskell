@@ -18,6 +18,8 @@ import qualified Data.Serialize.Get as Get
 import           Data.Word (Word8, Word16, Word32, Word64)
 import           Data.WideWord (Int128, Word128)
 
+import           Foreign (Storable (..))
+
 import           P
 
 
@@ -31,7 +33,7 @@ import           P
 -- The potentially zigzag encoded natural number type is parameterised
 -- with the OrcWord associated type family.
 --
-class (Bits (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
+class (Storable i, Bits (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
   type OrcWord i :: *
   zigZag :: i -> OrcWord i
   unZigZag :: OrcWord i -> i

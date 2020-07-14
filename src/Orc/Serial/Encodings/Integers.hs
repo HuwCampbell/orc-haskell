@@ -6,6 +6,7 @@
 {-# LANGUAGE PatternGuards            #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE FlexibleContexts         #-}
+{-# LANGUAGE TypeApplications         #-}
 
 module Orc.Serial.Encodings.Integers (
     decodeFloat32
@@ -71,7 +72,7 @@ manyStorable from =
   ) ()
 
 {-# INLINE decodeBase128Varint #-}
-decodeBase128Varint :: forall w. (Storable w, OrcNum w) => ByteString -> Either String (Storable.Vector w)
+decodeBase128Varint :: forall w. (OrcNum w) => ByteString -> Either String (Storable.Vector w)
 decodeBase128Varint bytes =
   Get.runGet (manyStorable getBase128Varint) bytes
 
@@ -136,13 +137,13 @@ putBase128Varint =
 
 
 {-# INLINE decodeIntegerRLEv1 #-}
-decodeIntegerRLEv1 :: forall w . (Storable w, OrcNum w) => ByteString -> Either String (Storable.Vector w)
+decodeIntegerRLEv1 :: forall w . OrcNum w => ByteString -> Either String (Storable.Vector w)
 decodeIntegerRLEv1 bytes =
   Get.runGet getIntegerRLEv1 bytes
 
 
 {-# INLINE getIntegerRLEv1 #-}
-getIntegerRLEv1 :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
+getIntegerRLEv1 :: forall w . OrcNum w => Get (Storable.Vector w)
 getIntegerRLEv1 =
   let
     getSet :: Get (Storable.Vector w)
@@ -170,7 +171,7 @@ getIntegerRLEv1 =
 
 
 
-putIntegerRLEv1 :: forall w . (Storable w, OrcNum w) => Putter (Storable.Vector w)
+putIntegerRLEv1 :: forall w . OrcNum w => Putter (Storable.Vector w)
 putIntegerRLEv1 =
   let
     toRuns :: Storable.Vector w -> [(w, Word8)]
@@ -241,13 +242,13 @@ putIntegerRLEv1 =
 
 
 -- {-# INLINE decodeIntegerRLEv2 #-}
-decodeIntegerRLEv2 :: forall w . (Storable w, OrcNum w) => ByteString ->  Either String (Storable.Vector w)
+decodeIntegerRLEv2 :: forall w . OrcNum w => ByteString ->  Either String (Storable.Vector w)
 decodeIntegerRLEv2 =
   Get.runGet getIntegerRLEv2
 
 
 -- {-# INLINE getIntegerRLEv2 #-}
-getIntegerRLEv2 :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
+getIntegerRLEv2 :: forall w . OrcNum w => Get (Storable.Vector w)
 getIntegerRLEv2 =
   let
     ensureEmpty =
@@ -296,7 +297,7 @@ getIntegerRLEv2 =
 
 
 -- {-# INLINE getShortRepeat #-}
-getShortRepeat :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
+getShortRepeat :: forall w . OrcNum w => Get (Storable.Vector w)
 getShortRepeat = do
   header <- Get.getWord8
   let
@@ -311,7 +312,7 @@ getShortRepeat = do
 
 
 -- {-# INLINE getDirect #-}
-getDirect :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
+getDirect :: forall w . OrcNum w => Get (Storable.Vector w)
 getDirect = do
   header <- Get.getWord16be
   let
@@ -338,7 +339,7 @@ getDirect = do
 
 
 -- {-# INLINE getPatchedBase #-}
-getPatchedBase :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
+getPatchedBase :: forall w . OrcNum w => Get (Storable.Vector w)
 getPatchedBase = do
   header <- Get.getWord32be
   let
@@ -412,7 +413,7 @@ getPatchedBase = do
 
 
 -- {-# INLINE getDelta #-}
-getDelta :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
+getDelta :: forall w . OrcNum w => Get (Storable.Vector w)
 getDelta = do
   header <- Get.getWord16be
   let
@@ -451,7 +452,7 @@ getDelta = do
 
   let
     deltas =
-      Storable.map (unZigZag . fromIntegral) $
+      Storable.map fromIntegral $
         readLongsNative deltaBytes deltaRepeats width
 
     op =
@@ -461,10 +462,10 @@ getDelta = do
       if repeats == 1 then
         Storable.empty
       else
-        Storable.singleton deltaBase <> deltas
+        deltas
 
   return $
-    Storable.scanl' op baseValue scanVec
+    Storable.singleton baseValue <> Storable.scanl' op (deltaBase + baseValue) scanVec
 
 {-# INLINE readLongsNative #-}
 readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64

@@ -10,20 +10,11 @@ module Orc.X.Vector.Segment (
   , unsafeReify
   ) where
 
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as ByteString
-import qualified Data.Text as Text
-import           Data.Word
 import qualified Data.Vector as Boxed
-import qualified Data.Vector.Storable as Storable
-import           Data.Vector.Unboxed (Unbox)
-import qualified Data.Vector.Unboxed as Unboxed
-
-import           Foreign.Storable (Storable)
+import qualified Data.Vector.Generic as Generic
 
 import           P hiding (length, concat, empty)
 
-import qualified Data.Vector.Generic as Generic
 
 -- Common with Zebra
 

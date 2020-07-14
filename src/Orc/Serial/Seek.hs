@@ -28,7 +28,6 @@ import           Data.Word (Word64)
 import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
-import qualified Data.Text as Text
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
@@ -85,13 +84,13 @@ checkOrcFile file =
 printOrcFile :: FilePath -> IO ()
 printOrcFile fp = do
   res <-
-    runResourceT $ do
-      runEitherT $
-        ByteStream.stdout $
-          ByteStream.concat $
-            Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppRow x) $> r) $
-              streamLogical $
-                openOrcFile fp
+    runResourceT
+      $ runEitherT
+      $ ByteStream.stdout
+      $ ByteStream.concat
+      $ Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppRow x) $> r)
+      $ streamLogical
+      $ openOrcFile fp
 
   case res of
     Right () -> pure ()

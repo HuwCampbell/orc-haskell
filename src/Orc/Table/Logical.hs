@@ -73,8 +73,14 @@ buildRow = \case
     in
       Builder.char8 '{' <> fields fs <> Builder.char8 '}'
 
-  Union _ r ->
-    buildRow r
+  Union i r ->
+    buildRow
+      $ Struct
+      $ Vector.fromList [
+        StructField (StructFieldName "tag") (Bytes i)
+      , StructField (StructFieldName "value") r
+      ]
+
 
   List rs ->
     let

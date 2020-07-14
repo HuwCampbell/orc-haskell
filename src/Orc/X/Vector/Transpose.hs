@@ -10,11 +10,8 @@ module Orc.X.Vector.Transpose (
 
 import           Control.Monad.ST (ST)
 
-import           Data.Vector.Fusion.Bundle.Size (toMax)
-
 import           Data.Vector.Generic as Generic
 import qualified Data.Vector.Generic.Mutable as MGeneric
-import qualified Data.Vector.Unboxed as Unboxed
 import qualified Data.Vector.Unboxed.Mutable as MUnboxed
 
 import           P hiding (for, mapMaybe, splitAt)
@@ -88,7 +85,7 @@ transposeJagged xss max_cols =
     Generic.create $ do
       yss <- MGeneric.unsafeNew max_cols
       ys0 <- MGeneric.unsafeNew (max_cols * n_rows)
-      ns <- MUnboxed.replicate max_cols 0
+      ns  <- MUnboxed.replicate max_cols 0
 
       -- Walk rows in blocks of 16, so that they're kept in cache between loops
       -- over columns - benchmarking suggests that blocks of 16 is a reasonably
