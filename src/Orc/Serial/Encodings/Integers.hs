@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns             #-}
+{-# LANGUAGE DoAndIfThenElse          #-}
 {-# LANGUAGE NoImplicitPrelude        #-}
 {-# LANGUAGE ScopedTypeVariables      #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -126,9 +127,10 @@ putBase128Varint =
         terminates =
           remainder == 0
 
-      if terminates
-        then Put.putWord8 masked
-        else Put.putWord8 (masked .|. b10000000) >> go remainder
+      if terminates then
+        Put.putWord8 masked
+      else
+        Put.putWord8 (masked .|. b10000000) >> go remainder
   in
     go . zigZag
 
@@ -238,14 +240,13 @@ putIntegerRLEv1 =
     putSet
 
 
-
-{-# INLINE decodeIntegerRLEv2 #-}
+-- {-# INLINE decodeIntegerRLEv2 #-}
 decodeIntegerRLEv2 :: forall w . (Storable w, OrcNum w) => ByteString ->  Either String (Storable.Vector w)
 decodeIntegerRLEv2 =
   Get.runGet getIntegerRLEv2
 
 
-{-# INLINE getIntegerRLEv2 #-}
+-- {-# INLINE getIntegerRLEv2 #-}
 getIntegerRLEv2 :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getIntegerRLEv2 =
   let
@@ -294,7 +295,7 @@ getIntegerRLEv2 =
       consumeMany getLabelledSet
 
 
-{-# INLINE getShortRepeat #-}
+-- {-# INLINE getShortRepeat #-}
 getShortRepeat :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getShortRepeat = do
   header <- Get.getWord8
@@ -309,7 +310,7 @@ getShortRepeat = do
     Storable.replicate (fromIntegral repeats) value
 
 
-{-# INLINE getDirect #-}
+-- {-# INLINE getDirect #-}
 getDirect :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getDirect = do
   header <- Get.getWord16be
@@ -336,7 +337,7 @@ getDirect = do
       readLongsNative dataBytes repeats width
 
 
-{-# INLINE getPatchedBase #-}
+-- {-# INLINE getPatchedBase #-}
 getPatchedBase :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getPatchedBase = do
   header <- Get.getWord32be
@@ -410,7 +411,7 @@ getPatchedBase = do
     adjustedValue
 
 
-{-# INLINE getDelta #-}
+-- {-# INLINE getDelta #-}
 getDelta :: forall w . (Storable w, OrcNum w) => Get (Storable.Vector w)
 getDelta = do
   header <- Get.getWord16be

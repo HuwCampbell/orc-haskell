@@ -85,16 +85,16 @@ checkOrcFile file =
 printOrcFile :: FilePath -> IO ()
 printOrcFile fp = do
   res <-
-    runResourceT $
-      runEitherT $ do
-        Streaming.stdoutLn $
-          Streaming.take 10 $
-          Streaming.map (Text.unpack . ppRow) $
-            streamLogical $
-              openOrcFile fp
+    runResourceT $ do
+      runEitherT $
+        ByteStream.stdout $
+          ByteStream.concat $
+            Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppRow x) $> r) $
+              streamLogical $
+                openOrcFile fp
 
   case res of
-    Right () -> putStrLn "Done"
+    Right () -> pure ()
     Left err -> putStrLn err
 
 
@@ -521,7 +521,7 @@ decodeStringDictionary decodeIntegerFunc = do
         splitByteString lengths dictionaryBytes
 
     discovered =
-      Boxed.map (\i -> fromMaybe "" (dictionary Boxed.!? (fromIntegral i))) $
+      Boxed.map (\i -> dictionary Boxed.! (fromIntegral i)) $
         Boxed.convert selections
 
   return $

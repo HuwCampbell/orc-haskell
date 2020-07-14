@@ -14,9 +14,10 @@ import           Data.Decimal (Decimal)
 import           Data.Word (Word8)
 import           Data.WideWord (Int128)
 import qualified Data.List as List
-import qualified Data.Text.Lazy as Lazy
-import qualified Data.Text.Internal.Builder as Builder
+import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString.Builder as Builder
 import qualified Data.Vector as Vector
+import qualified Data.Text as Text
 
 
 import           Orc.Data.Data
@@ -55,97 +56,85 @@ data Row
   deriving (Eq, Show)
 
 
-ppRow :: Row -> Text
+ppRow :: Row -> Lazy.ByteString
 ppRow =
-  Lazy.toStrict . Builder.toLazyText . buildRow
+  Builder.toLazyByteString . (<> Builder.char8 '\n') . buildRow
 
 
 buildRow :: Row -> Builder.Builder
 buildRow = \case
   Struct fs ->
     let
-      fields = List.intersperse (Builder.fromText ", ") . fmap buildField . Vector.toList
+      fields = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildField . Vector.toList
     in
-      Builder.singleton '{' <> mconcat (fields fs) <> Builder.singleton '}'
+      Builder.char8 '{' <> fields fs <> Builder.char8 '}'
 
   Union i r ->
-    Builder.fromString (show i) <> Builder.fromText ": " <> buildRow r
+    Builder.word8Dec i <> (Builder.byteString ": ") <> buildRow r
 
   List rs ->
     let
-      vals = List.intersperse (Builder.fromText ", ") . fmap buildRow . Vector.toList
+      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildRow . Vector.toList
     in
-      Builder.singleton '[' <> mconcat (vals rs) <> Builder.singleton ']'
+      Builder.char8 '[' <> vals rs <> Builder.char8 ']'
 
   Map rs ->
     let
-      vals = List.intersperse (Builder.fromText ", ") . fmap buildMap . Vector.toList
+      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildMap . Vector.toList
     in
-      Builder.singleton '{' <> mconcat (vals rs) <> Builder.singleton '}'
+      Builder.char8 '{' <> vals rs <> Builder.char8 '}'
 
   Bool b ->
-    Builder.fromText $
-      if b then "T" else "F"
+    Builder.char8 $
+      if b then 'T' else 'F'
 
   Bytes b ->
-    Builder.fromString $
-      show b
+    Builder.word8Dec b
 
   Short b ->
-    Builder.fromString $
-      show b
+    Builder.int16Dec b
 
   Integer b ->
-    Builder.fromString $
-      show b
+    Builder.int32Dec b
 
   Long b ->
-    Builder.fromString $
-      show b
+    Builder.int64Dec b
 
   Decimal b ->
-    Builder.fromString $
+    Builder.stringUtf8 $
       show b
 
   Date b ->
-    Builder.fromString $
-      show b
+    Builder.int64Dec b
 
   Timestamp b ->
-    Builder.fromString $
-      show b
+    Builder.int64Dec b
 
   Float b ->
-    Builder.fromString $
-      show b
+    Builder.floatDec b
 
   Double b ->
-    Builder.fromString $
-      show b
+    Builder.doubleDec b
 
   String b ->
-    Builder.fromString $
-      show b
+    Builder.byteString b
 
   Char b ->
-    Builder.fromString $
-      show b
+    Builder.byteString b
 
   VarChar b ->
-    Builder.fromString $
-      show b
+    Builder.byteString b
 
   Binary b ->
-    Builder.fromString $
-      show b
+    Builder.byteString b
 
   Partial mv ->
-    maybe' (Builder.fromString "null") buildRow mv
+    maybe' (Builder.byteString "null") buildRow mv
 
 buildField :: StructField Row -> Builder.Builder
 buildField (StructField (StructFieldName n) r) =
-  Builder.fromText n <> Builder.fromText ": " <> buildRow r
+  Builder.stringUtf8 (Text.unpack n) <> Builder.byteString ": " <> buildRow r
 
 buildMap :: (Row,Row) -> Builder.Builder
 buildMap (k, v) =
-  buildRow k <> Builder.fromText ": " <> buildRow v
+  buildRow k <> Builder.byteString ": " <> buildRow v

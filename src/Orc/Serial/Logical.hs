@@ -39,12 +39,14 @@ streamLogical ss =
 
 
 toLogical :: StripeInformation -> Striped.Column -> Boxed.Vector Logical.Row
-toLogical stripeInfo column =
-  case column of
+toLogical stripeInfo =
+  go
+    where
+  go = \case
     Striped.Struct cols ->
       let
         logicals =
-          Boxed.map (toLogical stripeInfo . fieldValue) cols
+          Boxed.map (go . fieldValue) cols
 
         transposed =
           transpose logicals
@@ -58,9 +60,9 @@ toLogical stripeInfo column =
     Striped.Map lengths keys values ->
       let
         key_ =
-          toLogical stripeInfo keys
+          go keys
         values_ =
-          toLogical stripeInfo values
+          go values
         maps_ =
           Boxed.zipWith
             (Logical.Map ... Boxed.zip)
@@ -72,7 +74,7 @@ toLogical stripeInfo column =
 
     Striped.List lengths col ->
       let
-        inner = toLogical stripeInfo col
+        inner = go col
       in
         fmap Logical.List $ Segment.unsafeReify lengths inner
 
@@ -169,7 +171,7 @@ toLogical stripeInfo column =
     Striped.Partial present values ->
       let
         activeRows =
-          toLogical stripeInfo values
+          go values
 
         boxed =
           Boxed.convert present
@@ -193,7 +195,7 @@ toLogical stripeInfo column =
     Striped.Union tags variants ->
       let
         variantRows =
-          Boxed.map (toLogical stripeInfo) variants
+          Boxed.map go variants
 
         indicies =
           Boxed.map (const 0) variants
