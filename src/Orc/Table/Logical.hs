@@ -10,6 +10,7 @@ module Orc.Table.Logical (
 import           P
 
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as ByteString
 import           Data.Char (ord)
 import           Data.Decimal (Decimal)
 import           Data.Word (Word8)
@@ -135,7 +136,10 @@ buildRow = \case
     quoteBytes b
 
   Binary b ->
-    quoteBytes b
+    let
+      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap Builder.word8Dec
+    in
+      Builder.char8 '[' <> vals (ByteString.unpack b) <> Builder.char8 ']'
 
   Partial mv ->
     maybe' (null_) buildRow mv
