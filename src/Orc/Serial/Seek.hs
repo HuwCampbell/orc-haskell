@@ -286,8 +286,13 @@ popStream = do
       put (ix, rest, remainingBytes)
       return $! theseBytes
 
-    _ -> throwError $ "No streams to pop in column: " <> show (currentIndex ix)
+    _:_ ->
+      throwError $
+        "Streams remain, but not for column: " <> show (currentIndex ix)
 
+    _ ->
+      throwError $
+        "No streams remaining trying to pop column: " <> show (currentIndex ix)
 
 incrementColumn :: Monad m => OrcDecode m ()
 incrementColumn =

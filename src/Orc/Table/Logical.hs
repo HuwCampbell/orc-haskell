@@ -10,6 +10,7 @@ module Orc.Table.Logical (
 import           P
 
 import           Data.ByteString (ByteString)
+import           Data.Decimal (Decimal)
 import           Data.Word (Word8)
 import           Data.WideWord (Int128)
 import qualified Data.List as List
@@ -17,7 +18,6 @@ import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text.Internal.Builder as Builder
 import qualified Data.Vector as Vector
 
--- import           Numeric.Decimal (Decimal128)
 
 import           Orc.Data.Data
 import qualified X.Data.Vector as Boxed
@@ -37,7 +37,7 @@ data Row
   | Integer   !Int32
   | Long      !Int64
 
-  | Decimal   !Double
+  | Decimal   !Decimal
   | Date      !Int64
   | Timestamp !Int64
 

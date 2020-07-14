@@ -53,8 +53,8 @@ library
                      , ambiata-viking
                      , bytestring
                      , cereal
+                     , Decimal
                      , exceptions                      >= 0.10
-                    --  , decimal-arithmetic
                      , mtl
                      , mmorph                          >= 1.0        && < 1.2
                      , monad-control                   == 1.0.*
