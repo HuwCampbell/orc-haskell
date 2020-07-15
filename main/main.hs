@@ -12,6 +12,3 @@ main :: IO ()
 main = do
   (fp, _) <- execParser (info (parser <**> helper) idm)
   printOrcFile fp
-
-
-

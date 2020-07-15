@@ -36,14 +36,17 @@ library
                        Orc.Serial.Encodings.Integers
                        Orc.Serial.Encodings.OrcNum
 
-                       Orc.Serial.Logical
                        Orc.Serial.Seek
 
+                       Orc.Serial.Json.Logical
+
+                       Orc.Table.Convert
                        Orc.Table.Logical
                        Orc.Table.Striped
 
                        Orc.X.Vector.Segment
                        Orc.X.Vector.Transpose
+                       Orc.X.Vector
 
   build-depends:       base                            >= 3          && < 5
                      , ambiata-p

@@ -128,20 +128,20 @@ prop_spec_patch_IntegerRLEv2 :: Property
 prop_spec_patch_IntegerRLEv2 =
   withTests 1 . property $ do
     let
-      directExampleInput =
+      patchExampleInput =
         Strict.pack [0x8e, 0x13, 0x2b, 0x21, 0x07,
           0xd0, 0x1e, 0x00, 0x14, 0x70, 0x28, 0x32, 0x3c, 0x46, 0x50, 0x5a, 0x64, 0x6e,
           0x78, 0x82, 0x8c, 0x96, 0xa0, 0xaa, 0xb4, 0xbe, 0xfc, 0xe8]
 
-      directExpected :: Storable.Vector Word64
-      directExpected =
+      patchExpected :: Storable.Vector Word64
+      patchExpected =
         Storable.fromList [2030, 2000, 2020, 1000000, 2040, 2050, 2060, 2070,
           2080, 2090, 2100, 2110, 2120, 2130, 2140, 2150, 2160, 2170, 2180, 2190]
 
-      directOutput =
-        Get.runGet getIntegerRLEv2 directExampleInput
+      patchOutput =
+        Get.runGet getIntegerRLEv2 patchExampleInput
 
-    directOutput === Right directExpected
+    patchOutput === Right patchExpected
 
 
 prop_spec_delta_IntegerRLEv2 :: Property

@@ -44,9 +44,9 @@ import           Orc.Serial.Encodings.Bytes
 import           Orc.Serial.Encodings.Compression
 import           Orc.Serial.Encodings.Integers
 import           Orc.Serial.Encodings.OrcNum
-import           Orc.Serial.Logical (streamLogical)
+import           Orc.Serial.Json.Logical (ppJsonRow)
 import           Orc.Table.Striped (Column (..))
-import           Orc.Table.Logical (ppRow)
+import           Orc.Table.Convert (streamLogical)
 
 import           System.IO as IO
 
@@ -89,7 +89,7 @@ printOrcFile fp = do
       $ runEitherT
       $ ByteStream.stdout
       $ ByteStream.concat
-      $ Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppRow x) $> r)
+      $ Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppJsonRow x) $> r)
       $ streamLogical
       $ openOrcFile fp
 
@@ -295,6 +295,7 @@ popStream = do
     _ ->
       throwError $
         "No streams remaining trying to pop column: " <> show (currentIndex ix)
+
 
 incrementColumn :: Monad m => OrcDecode m ()
 incrementColumn =

@@ -16,8 +16,6 @@ import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString.Internal as ByteString
-import qualified Data.ByteString.Unsafe as Unsafe
 
 import           Orc.Schema.Types as Orc
 import qualified Orc.Serial.Encodings.Get as Get
