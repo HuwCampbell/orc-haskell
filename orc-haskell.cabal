@@ -65,6 +65,7 @@ library
                      , vector
                      , wide-word
                      , zlib
+                     , zstd
 
   hs-source-dirs:      src
   default-language:    Haskell98

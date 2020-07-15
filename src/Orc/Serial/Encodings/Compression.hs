@@ -27,6 +27,8 @@ import qualified Snapper
 import qualified Codec.Compression.Zlib.Raw as Zlib
 import           Codec.Compression.Zlib.Internal (DecompressError)
 
+import qualified Codec.Compression.Zstd as Zstd
+
 import           P
 
 
@@ -40,6 +42,8 @@ readCompressedStream = \case
     readSnappyParts
   Just ZLIB ->
     readZlibParts
+  Just ZSTD ->
+    readZstdParts
   Just u ->
     const (Left $ "Unsupported Compression Kind: " <> show u)
 
@@ -99,3 +103,33 @@ readZlibParts bytes = do
 
   fmap (thisRound <>) $
     readZlibParts remaining
+
+
+
+readZstdParts :: ByteString -> Either String ByteString
+readZstdParts bytes
+  | ByteString.null bytes
+  = Right ByteString.empty
+readZstdParts bytes = do
+  header <- Get.runGet Get.getWord24le bytes
+  let
+    (len, isOriginal) =
+      header `divMod` 2
+
+    (pertinent, remaining) =
+      ByteString.splitAt (fromIntegral len) $
+        ByteString.drop 3 bytes
+
+  thisRound <-
+    if isOriginal == 1 then pure pertinent else
+      case Zstd.decompress pertinent of
+        Zstd.Decompress bs
+          -> Right bs
+        Zstd.Error msg
+          -> Left $ "Zstd decompression failed with " <> msg
+        Zstd.Skip
+          -> Left "Zstd skip encountered"
+
+  fmap (thisRound <>) $
+    readZstdParts remaining
+
