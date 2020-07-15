@@ -9,24 +9,24 @@ module Orc.Table.Logical (
 
 import           P
 
+-- import           Chronos (Time, Day, builderUtf8_Ymd, dayToDate)
+
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import           Data.Char (ord)
 import           Data.Decimal (Decimal)
 import           Data.Word (Word8)
-import           Data.WideWord (Int128)
 import qualified Data.List as List
 import qualified Data.ByteString.Lazy as Lazy
 import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Builder.Prim as Prim
 import           Data.ByteString.Builder.Prim ((>*<), (>$<))
-import qualified Data.Vector as Vector
-import qualified Data.Text as Text
+import qualified Data.Vector as Boxed
 import           Data.Text.Encoding (encodeUtf8BuilderEscaped)
 
 import           Orc.Data.Data
-import qualified Data.Vector as Boxed
+import qualified Orc.Data.Time as Orc
 
 data Row
   -- Composite Columns
@@ -44,7 +44,7 @@ data Row
   | Long      !Int64
 
   | Decimal   !Decimal
-  | Date      !Int64
+  | Date      !Orc.Day
   | Timestamp !Int64
 
   | Float     !Float
@@ -70,28 +70,27 @@ buildRow :: Row -> Builder.Builder
 buildRow = \case
   Struct fs ->
     let
-      fields = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildField . Vector.toList
+      fields = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildField . Boxed.toList
     in
       Builder.char8 '{' <> fields fs <> Builder.char8 '}'
 
   Union i r ->
     buildRow
       $ Struct
-      $ Vector.fromList [
+      $ Boxed.fromList [
         StructField (StructFieldName "tag") (Bytes i)
       , StructField (StructFieldName "value") r
       ]
 
-
   List rs ->
     let
-      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildRow . Vector.toList
+      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildRow . Boxed.toList
     in
       Builder.char8 '[' <> vals rs <> Builder.char8 ']'
 
   Map rs ->
     let
-      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildMap . Vector.toList
+      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildMap . Boxed.toList
     in
       Builder.char8 '{' <> vals rs <> Builder.char8 '}'
 
@@ -115,10 +114,13 @@ buildRow = \case
       show b
 
   Date b ->
-    Builder.int64Dec b
+    Builder.char8 '"' <>
+      builderUtf8_Ymd (Orc.dayToDate b) <>
+        Builder.char8 '"'
 
   Timestamp b ->
-    Builder.int64Dec b
+    Builder.string8 $
+      show b
 
   Float b ->
     Builder.floatDec b
@@ -216,3 +218,26 @@ escapeAscii =
 c2w :: Char -> Word8
 c2w c = fromIntegral (ord c)
 {-# INLINE c2w #-}
+
+-- | Given a 'Date' and a separator, construct a 'ByteString' 'BB.Builder'
+--   corresponding to a Day\/Month\/Year encoding.
+builderUtf8_Ymd :: Orc.Date -> Builder
+builderUtf8_Ymd (Orc.Date y m d) =
+       Builder.int64Dec y
+    <> "-"
+    <> pad2_ m
+    <> "-"
+    <> pad2_ d
+
+-- | Encode a JSON boolean.
+pad2_ :: Int64 -> Builder
+pad2_ =
+  Prim.primBounded
+    (Prim.condB (<10)
+      pad2from1
+      (Prim.int64Dec))
+
+  where
+    pad2from1 :: Prim.BoundedPrim Int64
+    pad2from1 =
+      (\c -> ('0', c)) >$< Prim.liftFixedToBounded Prim.char7 >*< Prim.int64Dec

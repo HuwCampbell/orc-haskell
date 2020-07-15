@@ -17,6 +17,7 @@ import           Streaming (Of (..))
 import qualified Streaming.Prelude as Streaming
 
 import           Orc.Data.Data (StructField (..))
+import           Orc.Data.Time (Day (..))
 import           Orc.Schema.Types as Orc
 
 import qualified Orc.Table.Striped as Striped
@@ -133,7 +134,9 @@ toLogical stripeInfo =
         boxed =
           Boxed.convert x
       in
-        fmap Logical.Date boxed
+        fmap Logical.Date $
+          Boxed.map Day $
+            boxed
 
     Striped.Timestamp x ->
       let

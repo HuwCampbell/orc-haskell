@@ -7,7 +7,7 @@ synopsis:
 homepage:
   orc.huwcampbell.com
 license:
-  MIT
+  All Rights Reserved
 license-file:
   LICENSE
 author:
@@ -27,6 +27,7 @@ library
   exposed-modules:
                        Orc.Data.Data
                        Orc.Data.Segmented
+                       Orc.Data.Time
 
                        Orc.Schema.Protobuf.Definitions
                        Orc.Schema.Types
@@ -54,7 +55,6 @@ library
                      , Decimal
                      , exceptions                      >= 0.10
                      , mtl
-                     , mmorph                          >= 1.0        && < 1.2
                      , monad-control                   == 1.0.*
                      , protobuf                        >= 0.2        && < 0.3
                      , pretty-show
