@@ -51,6 +51,7 @@ readCompressedStream = \case
   Just LZ4 ->
     const (Left "Unsupported Compression Type LZ4")
 
+
 note :: a -> Maybe b -> Either a b
 note x = maybe (Left x) Right
 
@@ -62,12 +63,12 @@ overLazy f =
 
 readCompressedParts :: (Int -> ByteString -> Either String ByteString) -> ByteString -> Either String ByteString
 readCompressedParts action =
-  go
+  go ByteString.empty
     where
-  go bytes
+  go acc bytes
     | ByteString.null bytes
-    = Right ByteString.empty
-  go bytes = do
+    = Right acc
+  go acc bytes = do
     header <- Get.runGet Get.getWord24le bytes
     let
       (len, isOriginal) =
@@ -81,8 +82,7 @@ readCompressedParts action =
       if isOriginal == 1 then pure pertinent else
         action (fromIntegral len) pertinent
 
-    fmap (thisRound <>) $
-      go remaining
+    go (acc <> thisRound) remaining
 
 
 readSnappyParts :: ByteString -> Either String ByteString
