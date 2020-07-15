@@ -462,10 +462,10 @@ getDelta = do
       if repeats == 1 then
         Storable.empty
       else
-        deltas
+        Storable.singleton deltaBase <> deltas
 
   return $
-    Storable.singleton baseValue <> Storable.scanl' op (deltaBase + baseValue) scanVec
+    Storable.scanl' op baseValue scanVec
 
 {-# INLINE readLongsNative #-}
 readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64

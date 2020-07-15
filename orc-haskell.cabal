@@ -7,9 +7,7 @@ synopsis:
 homepage:
   orc.huwcampbell.com
 license:
-  All Rights Reserved
-license-file:
-  LICENSE
+  AllRightsReserved
 author:
   Huw Campbell
 maintainer:
@@ -81,8 +79,6 @@ library
                        csrc/bytes.c
 
 executable main
-  type:                exitcode-stdio-1.0
-
   main-is:             main.hs
 
   ghc-options:         -Wall -threaded -O2
