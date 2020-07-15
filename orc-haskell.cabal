@@ -64,6 +64,8 @@ library
                      , transformers-either
                      , vector
                      , wide-word
+
+                     , lzo
                      , zlib
                      , zstd
 

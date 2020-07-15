@@ -11,10 +11,7 @@ module Orc.Serial.Encodings.OrcNum (
   , unZigZag64
 ) where
 
-import           Data.Bits (Bits, shiftL, shiftR, xor, (.&.), (.|.))
-import           Data.Int (Int8, Int16, Int32, Int64)
-import           Data.Serialize.Get (Get)
-import qualified Data.Serialize.Get as Get
+import           Data.Bits (Bits, shiftL, shiftR, xor, (.&.))
 import           Data.Word (Word8, Word16, Word32, Word64)
 import           Data.WideWord (Int128, Word128)
 

@@ -47,7 +47,7 @@ import           Data.String (String)
 import qualified Data.Vector.Storable as Storable
 import qualified Data.Vector.Storable.Mutable as Mutable
 
-import           Foreign (Storable (..), mallocForeignPtrArray, withForeignPtr, plusPtr)
+import           Foreign (mallocForeignPtrArray, withForeignPtr, plusPtr)
 import           Foreign.Ptr (Ptr)
 
 import qualified Orc.Serial.Encodings.Get as Get
