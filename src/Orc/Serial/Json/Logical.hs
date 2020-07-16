@@ -1,7 +1,18 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{- | Serialize a Logical Row to a JSON value.
 
+     This doesn't use Aeson or another intermediate JSON data type
+     and instead goes directly to a Builder / Lazy ByteString for
+     two reasons.
+       - The Order of columns would come out in a random order, due
+         to Aeson using a HashMap for its objects
+       - Performance reasons; this already takes up 50% of the time
+         in printing an Orc file to Json, so we don't want it to be
+         any slower.
+
+-}
 module Orc.Serial.Json.Logical (
   ppJsonRow
 ) where
@@ -31,11 +42,12 @@ ppJsonRow =
   Builder.toLazyByteString . (<> Builder.char8 '\n') . buildRow
 
 
+-- | Render a row json.
 buildRow :: Row -> Builder.Builder
 buildRow = \case
   Struct fs ->
     let
-      fields = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildField . Boxed.toList
+      fields = mconcat . List.intersperse commaSpace . fmap buildField . Boxed.toList
     in
       Builder.char8 '{' <> fields fs <> Builder.char8 '}'
 
@@ -49,13 +61,13 @@ buildRow = \case
 
   List rs ->
     let
-      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildRow . Boxed.toList
+      vals = mconcat . List.intersperse commaSpace . fmap buildRow . Boxed.toList
     in
       Builder.char8 '[' <> vals rs <> Builder.char8 ']'
 
   Map rs ->
     let
-      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap buildMap . Boxed.toList
+      vals = mconcat . List.intersperse commaSpace . fmap buildMap . Boxed.toList
     in
       Builder.char8 '{' <> vals rs <> Builder.char8 '}'
 
@@ -104,30 +116,40 @@ buildRow = \case
 
   Binary b ->
     let
-      vals = mconcat . List.intersperse (Builder.byteString ", ") . fmap Builder.word8Dec
+      vals = mconcat . List.intersperse commaSpace . fmap Builder.word8Dec
     in
       Builder.char8 '[' <> vals (ByteString.unpack b) <> Builder.char8 ']'
 
   Partial mv ->
     maybe' null_ buildRow mv
 
-
+-- | Render a struct field as an object part.
 buildField :: StructField Row -> Builder.Builder
 buildField (StructField (StructFieldName n) r) =
   text n <> colonSpace <> buildRow r
 
 
+-- | Render a pair of rows as an object part.
+--
+--   This is a bit of an issue, as it won't yield perfect json if the
+--   key is not stringly.
 buildMap :: (Row,Row) -> Builder.Builder
 buildMap (k, v) =
   buildRow k <> colonSpace <> buildRow v
 
 
+commaSpace :: Builder
+commaSpace = Prim.primBounded (ascii2 (',', ' ')) ()
+
+
 colonSpace :: Builder
 colonSpace = Prim.primBounded (ascii2 (':', ' ')) ()
+
 
 -- | Encode a JSON null.
 null_ :: Builder
 null_ = Prim.primBounded (ascii4 ('n',('u',('l','l')))) ()
+
 
 -- | Encode a JSON boolean.
 bool_ :: Bool -> Builder
