@@ -8,6 +8,10 @@ module Orc.Data.Time (
     Day (..)
   , Date (..)
   , dayToDate
+
+  , Timestamp (..)
+  , DateTime (..)
+  , timestampToDateTime
 ) where
 
 import Orc.Prelude
@@ -17,11 +21,26 @@ newtype Day = Day {
     getDay :: Int64
   } deriving (Eq, Ord, Show)
 
+data Timestamp = Timestamp {
+    -- | Number of seconds since January 1, 2015
+    timestampSeconds  :: !Int64
+    -- | Number of nanoseconds
+  , timestampNanos    :: !Word64
+  } deriving (Eq, Ord, Show)
+
+
 data Date = Date {
     dateYear  :: !Int64
   , dateMonth :: !Int64
   , dateDay   :: !Int64
   } deriving (Eq, Ord, Show)
+
+
+data DateTime = DateTime {
+    dtDate :: !Date
+  , dtTime :: !Word64
+  } deriving (Eq, Ord, Show)
+
 
 dayToDate :: Day -> Date
 dayToDate (Day g) =
@@ -46,3 +65,17 @@ dayToDate (Day g) =
     dd = ddx - (mi*306 + 5)`div`10 + 1
   in
     Date (y + (mi + 2)`div`12) mm dd
+
+timestampToDateTime :: Timestamp -> DateTime
+timestampToDateTime (Timestamp ts tn) =
+  let
+    (days, sid) =
+      ts `divMod` 86400
+    epoch =
+      days + 16436
+    date =
+      dayToDate $ Day epoch
+    nanos =
+      fromIntegral sid * 10^(9 :: Int) + tn
+  in
+    DateTime date nanos

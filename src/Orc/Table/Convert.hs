@@ -16,11 +16,11 @@ import           Streaming (Of (..))
 import qualified Streaming.Prelude as Streaming
 
 import           Orc.Data.Data (StructField (..))
-import           Orc.Data.Time (Day (..))
+import           Orc.Data.Time (Day (..), Timestamp (..))
 import           Orc.Schema.Types as Orc
 
 import qualified Orc.Table.Striped as Striped
-import           Orc.Table.Logical as Logical
+import qualified Orc.Table.Logical as Logical
 import           Orc.X.Vector.Segment as Segment
 import           Orc.X.Vector.Transpose (transpose)
 
@@ -133,16 +133,17 @@ toLogical stripeInfo =
         boxed =
           Boxed.convert x
       in
-        fmap Logical.Date $
-          Boxed.map Day $
-            boxed
+        fmap (Logical.Date . Day) $
+          boxed
 
-    Striped.Timestamp x ->
+    Striped.Timestamp seconds nanos ->
       let
-        boxed =
-          Boxed.convert x
+        seconds_ =
+          Boxed.convert seconds
+        nanos_ =
+          Boxed.convert nanos
       in
-        fmap Logical.Timestamp boxed
+        Boxed.zipWith (Logical.Timestamp ... Timestamp) seconds_ nanos_
 
     Striped.Float x ->
       let

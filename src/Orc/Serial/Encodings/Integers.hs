@@ -25,6 +25,7 @@ module Orc.Serial.Encodings.Integers (
   , decodeIntegerRLEv2
 
   , powerOfTen
+  , parseNano
 ) where
 
 import           Control.Arrow ((&&&))
@@ -508,3 +509,16 @@ powerOfTen :: Integral i => i -> i -> Ratio i
 powerOfTen base power =
   base % (10 ^ power)
 {-# INLINE powerOfTen #-}
+
+
+
+parseNano :: Word64 -> Word64
+parseNano nano =
+  let
+    zeros =
+      nano .&. 0x07
+    result =
+      nano `shiftR` 3
+  in
+    result * (10 ^ zeros)
+{-# INLINE parseNano #-}

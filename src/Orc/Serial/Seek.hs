@@ -23,7 +23,6 @@ import           Control.Monad.Trans.Resource (MonadResource (..), runResourceT,
 import qualified Data.Serialize.Get as Get
 
 import           Data.List (dropWhile)
-import           Data.Word (Word64)
 
 import           Data.String (String)
 import           Data.ByteString (ByteString)
@@ -397,8 +396,12 @@ decodeColumnPart typs = do
 
     (TIMESTAMP, enc) -> do
       secondsBytes <- popStream
-      _nanoBytes   <- popStream
-      Timestamp <$> liftEither (decodeIntegerRLEversion enc secondsBytes)
+      nanoBytes    <- popStream
+
+      seconds      <- liftEither (decodeIntegerRLEversion enc secondsBytes)
+      nanos        <- liftEither (decodeIntegerRLEversion enc nanoBytes)
+
+      return $ Timestamp seconds (Storable.map parseNano nanos)
 
     (DATE, enc) -> do
       dataBytes <- popStream

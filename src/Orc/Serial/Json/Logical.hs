@@ -96,8 +96,10 @@ buildRow = \case
         Builder.char8 '"'
 
   Timestamp b ->
-    Builder.string8 $
-      show b
+    Builder.char8 '"' <>
+      builderDateTime (Orc.timestampToDateTime b)  <>
+        Builder.char8 '"'
+
 
   Float b ->
     Builder.floatDec b
@@ -215,6 +217,26 @@ builderUtf8_Ymd (Orc.Date y m d) =
     <> pad2_ m
     <> "-"
     <> pad2_ d
+
+
+builderDateTime :: Orc.DateTime -> Builder
+builderDateTime (Orc.DateTime d ns) =
+  builderUtf8_Ymd d <> "T" <> builderUtf8_HMS ns
+
+
+builderUtf8_HMS :: Word64 -> Builder
+builderUtf8_HMS nanos =
+       pad2_ (fromIntegral h)
+    <> ":"
+    <> pad2_ (fromIntegral m)
+    <> ":"
+    <> pad2_ (fromIntegral s)
+    -- <> prettyNanosecondsBuilderUtf8 sp nsRemainder
+  where
+    (h, mm) = nanos `divMod` 3600000000000
+    (m, ss) = mm    `divMod`   60000000000
+    (s, _ ) = ss    `divMod`    1000000000
+
 
 -- | Encode a JSON boolean.
 pad2_ :: Int64 -> Builder

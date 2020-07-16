@@ -35,7 +35,7 @@ data Column
 
   | Decimal   !(Storable.Vector Int128) !(Storable.Vector Int16)
   | Date      !(Storable.Vector Int64)
-  | Timestamp !(Storable.Vector Int64)
+  | Timestamp !(Storable.Vector Int64)  !(Storable.Vector Word64)
 
   | Float     !(Storable.Vector Float)
   | Double    !(Storable.Vector Double)

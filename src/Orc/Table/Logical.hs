@@ -34,7 +34,7 @@ data Row
 
   | Decimal   !Decimal
   | Date      !Orc.Day
-  | Timestamp !Int64
+  | Timestamp !Orc.Timestamp
 
   | Float     !Float
   | Double    !Double

@@ -1,0 +1,6 @@
+packages: .
+          lib/snapper/
+
+constraints:
+  cabal > 2
+
