@@ -511,7 +511,11 @@ powerOfTen base power =
 {-# INLINE powerOfTen #-}
 
 
-
+-- | Fixup a nanoseconds.
+--
+--   The specification appears to be incorrect in specifying how to
+--   parse nanoseconds, or rather, it doesn't try. There's a broken
+--   sentence fragment, but whoever was writing it forgot to finish.
 parseNano :: Word64 -> Word64
 parseNano nano =
   let
@@ -520,5 +524,8 @@ parseNano nano =
     result =
       nano `shiftR` 3
   in
-    result * (10 ^ zeros)
+    if zeros == 0 then
+      result
+    else
+      result * (10 ^ (zeros + 1))
 {-# INLINE parseNano #-}

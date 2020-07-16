@@ -231,11 +231,14 @@ builderUtf8_HMS nanos =
     <> pad2_ (fromIntegral m)
     <> ":"
     <> pad2_ (fromIntegral s)
+    <> "."
+    <> lengthWord64 ns
+
     -- <> prettyNanosecondsBuilderUtf8 sp nsRemainder
   where
     (h, mm) = nanos `divMod` 3600000000000
     (m, ss) = mm    `divMod`   60000000000
-    (s, _ ) = ss    `divMod`    1000000000
+    (s, ns) = ss    `divMod`    1000000000
 
 
 -- | Encode a JSON boolean.
@@ -250,3 +253,17 @@ pad2_ =
     pad2from1 :: Prim.BoundedPrim Int64
     pad2from1 =
       (\c -> ('0', c)) >$< Prim.liftFixedToBounded Prim.char7 >*< Prim.int64Dec
+
+
+-- | Render nanoseconds, padding to a decimal point
+lengthWord64 :: Word64 -> Builder
+lengthWord64 n
+  | n < 10 = "00000000" <> Builder.word64Dec n
+  | n < 100 = "0000000" <> Builder.word64Dec n
+  | n < 1000 = "000000" <> Builder.word64Dec n
+  | n < 10000 = "00000" <> Builder.word64Dec n
+  | n < 100000 = "0000" <> Builder.word64Dec n
+  | n < 1000000 = "000" <> Builder.word64Dec n
+  | n < 10000000 = "00" <> Builder.word64Dec n
+  | n < 100000000 = "0" <> Builder.word64Dec n
+  | otherwise      =       Builder.word64Dec n

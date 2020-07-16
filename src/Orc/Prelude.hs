@@ -52,7 +52,7 @@ module Orc.Prelude (
   , Alternative (..)
   , asum
   -- ** Monad
-  , Monad (..)
+  , Monad ((>>=), (>>), return)
   , join
   , bind
   , (=<<)
