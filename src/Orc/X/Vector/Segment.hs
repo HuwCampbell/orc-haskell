@@ -13,7 +13,7 @@ module Orc.X.Vector.Segment (
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Generic as Generic
 
-import           P hiding (length, concat, empty)
+import           Orc.Prelude hiding (length, empty)
 
 
 -- Common with Zebra

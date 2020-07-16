@@ -56,7 +56,7 @@ import           Orc.Serial.Encodings.OrcNum
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 
-import           P
+import           Orc.Prelude
 
 
 b10000000 :: Word8

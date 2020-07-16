@@ -14,8 +14,9 @@ import           Data.Vector.Generic as Generic
 import qualified Data.Vector.Generic.Mutable as MGeneric
 import qualified Data.Vector.Unboxed.Mutable as MUnboxed
 
-import           P hiding (for, mapMaybe, splitAt)
+import           Orc.Prelude hiding (for)
 
+import           Prelude (minBound, maxBound)
 
 -- | The 'transpose' function transposes the rows and columns of its argument.
 --

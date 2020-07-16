@@ -17,7 +17,7 @@ module Orc.Serial.Json.Logical (
   ppJsonRow
 ) where
 
-import           P
+import           Orc.Prelude
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString

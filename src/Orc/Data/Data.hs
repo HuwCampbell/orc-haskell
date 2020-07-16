@@ -18,7 +18,7 @@ import           Control.Monad.Except
 
 import           Data.Word (Word32)
 import qualified Data.Vector as Boxed
-import           P
+import           Orc.Prelude
 
 data StructField a = StructField {
     fieldName :: StructFieldName

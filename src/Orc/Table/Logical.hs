@@ -6,7 +6,7 @@ module Orc.Table.Logical (
     Row (..)
 ) where
 
-import           P
+import           Orc.Prelude
 
 import           Data.ByteString (ByteString)
 import           Data.Decimal (Decimal)

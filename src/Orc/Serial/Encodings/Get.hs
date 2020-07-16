@@ -18,7 +18,7 @@ import qualified Data.Serialize.Get as Get
 
 import           Orc.Serial.Encodings.OrcNum
 
-import           P
+import           Orc.Prelude
 
 
 getWord24le :: Get Word32

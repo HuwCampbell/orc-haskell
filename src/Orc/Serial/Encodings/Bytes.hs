@@ -34,7 +34,7 @@ import           Foreign.Ptr (Ptr, plusPtr)
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.IO as IO
 
-import           P
+import           Orc.Prelude
 
 
 {-# INLINE decodeBytesNative #-}

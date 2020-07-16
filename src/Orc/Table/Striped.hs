@@ -2,7 +2,7 @@ module Orc.Table.Striped (
   Column (..)
 ) where
 
-import           P
+import           Orc.Prelude
 
 import           Data.ByteString (ByteString)
 import           Data.Word (Word8, Word32)

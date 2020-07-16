@@ -1,6 +1,3 @@
-[submodule "lib/p"]
-	path = lib/p
-	url = git@github.com:icicle-lang/p.git
 [submodule "lib/snapper"]
 	path = lib/snapper
 	url = git@github.com:icicle-lang/snapper.git

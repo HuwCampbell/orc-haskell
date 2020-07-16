@@ -10,7 +10,7 @@ module Orc.Data.Time (
   , dayToDate
 ) where
 
-import P
+import Orc.Prelude
 
 -- Number of days after January 1, 1970
 newtype Day = Day {

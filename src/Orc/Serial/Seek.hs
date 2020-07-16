@@ -50,7 +50,7 @@ import           Orc.Table.Convert (streamLogical)
 
 import           System.IO as IO
 
-import           P
+import           Orc.Prelude
 
 type ByteStream = ByteStream.ByteString
 
@@ -543,7 +543,3 @@ liftMaybe =
 
 (...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (...) = (.) . (.)
-
-
-note :: a -> Maybe b -> Either a b
-note x = maybe (Left x) Right

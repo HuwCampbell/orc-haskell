@@ -21,14 +21,12 @@ import           Orc.Schema.Types as Orc
 
 import qualified Orc.Table.Striped as Striped
 import           Orc.Table.Logical as Logical
-import           Orc.X.Vector
 import           Orc.X.Vector.Segment as Segment
 import           Orc.X.Vector.Transpose (transpose)
 
-import           P
+import           Orc.Prelude
 
 import qualified Data.Vector as Boxed
-import qualified Data.Vector.Storable as Storable
 
 
 streamLogical

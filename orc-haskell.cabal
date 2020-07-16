@@ -27,6 +27,8 @@ library
                        Orc.Data.Segmented
                        Orc.Data.Time
 
+                       Orc.Prelude
+
                        Orc.Schema.Protobuf.Definitions
                        Orc.Schema.Types
 
@@ -49,7 +51,6 @@ library
                        Orc.X.Vector
 
   build-depends:       base                            >= 3          && < 5
-                     , ambiata-p
                      , ambiata-snapper
                      , bytestring
                      , cereal

@@ -29,7 +29,7 @@ import qualified Codec.Compression.Zlib.Raw as Zlib
 import           Codec.Compression.Zlib.Internal (DecompressError)
 import qualified Codec.Compression.Zstd as Zstd
 
-import           P
+import           Orc.Prelude
 
 
 readCompressedStream :: Maybe CompressionKind -> ByteString -> Either String ByteString
@@ -48,10 +48,6 @@ readCompressedStream = \case
     readLzoParts
   Just LZ4 ->
     const (Left "Unsupported Compression Type LZ4")
-
-
-note :: a -> Maybe b -> Either a b
-note x = maybe (Left x) Right
 
 
 overLazy :: (Lazy.ByteString -> Lazy.ByteString) -> ByteString -> ByteString
