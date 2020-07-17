@@ -5,10 +5,12 @@
 {-# LANGUAGE LambdaCase          #-}
 
 module Orc.Serial.Seek (
-    openOrcFile
+    withOrcFile
+  , withOrcStream
   , checkOrcFile
 
   , printOrcFile
+  , withFileLifted
 ) where
 
 import           Control.Monad.IO.Class
@@ -17,8 +19,7 @@ import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, 
 import           Control.Monad.Reader (ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
-import           Control.Monad.Trans.Either (EitherT, newEitherT, left, runEitherT)
-import           Control.Monad.Trans.Resource (MonadResource (..), runResourceT, allocate)
+import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
 
 import qualified Data.Serialize.Get as Get
 
@@ -65,12 +66,18 @@ withFileLifted file mode action =
     restoreT . return
 
 
-checkOrcFile :: FilePath -> EitherT String IO ([StripeInformation], Type, Maybe CompressionKind)
-checkOrcFile file =
+withOrcFile :: FilePath -> ((Handle, PostScript, Footer) -> EitherT String IO r) -> EitherT String IO r
+withOrcFile file action =
   withFileLifted file ReadMode $ \handle -> do
     (postScript, footer) <-
       checkMagic handle
 
+    action (handle, postScript, footer)
+
+
+checkOrcFile :: FilePath -> EitherT String IO ([StripeInformation], Type, Maybe CompressionKind)
+checkOrcFile file =
+  withOrcFile file $ \(_, postScript, footer) -> do
     let
       stripeInfos =
         stripes footer
@@ -78,34 +85,16 @@ checkOrcFile file =
       typeInfo =
         types footer
 
-    return (stripeInfos, typeInfo, (compression postScript))
+    return (stripeInfos, typeInfo, compression postScript)
 
 
-printOrcFile :: FilePath -> IO ()
-printOrcFile fp = do
-  res <-
-    runResourceT
-      $ runEitherT
-      $ ByteStream.stdout
-      $ ByteStream.concat
-      $ Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppJsonRow x) $> r)
-      $ streamLogical
-      $ openOrcFile fp
-
-  case res of
-    Right () -> pure ()
-    Left err -> putStrLn err
-
-
-openOrcFile :: MonadResource m => FilePath -> Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()
-openOrcFile file =
-  Streaming.effect $ do
-    (_, handle) <-
-      allocate (openFile file ReadMode) hClose
-
-    (postScript, footer) <-
-      checkMagic handle
-
+withOrcStream
+  :: MonadIO m
+  => FilePath
+  -> ((Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()) -> EitherT String IO r)
+  -> EitherT String IO r
+withOrcStream file action =
+  withOrcFile file $ \(handle, postScript, footer) -> do
     let
       stripeInfos =
         stripes footer
@@ -113,11 +102,19 @@ openOrcFile file =
       typeInfo =
         types footer
 
-    return $
+    action $
       Streaming.mapM
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)
 
+
+printOrcFile :: FilePath -> EitherT String IO ()
+printOrcFile fp = do
+  withOrcStream fp $
+    ByteStream.stdout
+      . ByteStream.concat
+      . Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppJsonRow x) $> r)
+      . streamLogical
 
 
 -- | Checks that the magic values are present in the file

@@ -1,13 +1,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE LambdaCase    #-}
 
 module Orc.Schema.Types (
-    Proto.CompressionKind (..)
+    CompressionKind (..)
   , Proto.StreamKind (..)
   , Proto.ColumnEncodingKind (..)
 
   , PostScript (..)
   , readPostScript
+
   , Footer (..)
   , readFooter
   , Type (..)
@@ -23,6 +25,11 @@ module Orc.Schema.Types (
 
   , Stream (..)
   , readStream
+
+
+
+  , toTypes
+  , fromTypes
   ) where
 
 import           Data.Int
@@ -36,6 +43,7 @@ import           Data.Traversable (for)
 import           Control.Monad.Trans.State (state, runState)
 
 import qualified Data.Serialize.Get as Get
+import qualified Data.Serialize.Put as Put
 
 import           Orc.Data.Data (StructField (..), StructFieldName (..))
 import qualified Orc.Schema.Protobuf.Definitions as Proto
@@ -49,12 +57,30 @@ data CompressionKind
   | ZSTD
   deriving (Eq, Ord, Show, Enum)
 
+fromProtoCompressionKind :: Proto.CompressionKind -> CompressionKind
+fromProtoCompressionKind = \case
+  Proto.NONE -> NONE
+  Proto.ZLIB -> ZLIB
+  Proto.SNAPPY -> SNAPPY
+  Proto.LZO -> LZO
+  Proto.LZ4 -> LZ4
+  Proto.ZSTD -> ZSTD
+
+toProtoCompressionKind :: CompressionKind -> Proto.CompressionKind
+toProtoCompressionKind = \case
+  NONE -> Proto.NONE
+  ZLIB -> Proto.ZLIB
+  SNAPPY -> Proto.SNAPPY
+  LZO -> Proto.LZO
+  LZ4 -> Proto.LZ4
+  ZSTD -> Proto.ZSTD
+
 data PostScript = PostScript {
     -- the length of the footer section in bytes
     -- NOTE: Changed to Required from Optional
     footerLength :: Word64
     -- the kind of generic compression used
-  , compression ::  Maybe Proto.CompressionKind
+  , compression ::  Maybe CompressionKind
     -- the maximum size of each compression chunk
   , compressionBlockSize :: Maybe Word64
     -- the version of the writer
@@ -67,16 +93,36 @@ data PostScript = PostScript {
 
 
 readPostScript :: ByteString -> Either String PostScript
-readPostScript bytes = do
-  raw <- Get.runGet decodeMessage bytes
-  return $
-    PostScript
-      (getField $ Proto.footerLength raw)
-      (getField $ Proto.compression raw)
-      (getField $ Proto.compressionBlockSize raw)
-      (getField $ Proto.version raw)
-      (getField $ Proto.metadataLength raw)
-      (getField $ Proto.magic raw)
+readPostScript bytes =
+  fromProtoPostScript <$> Get.runGet decodeMessage bytes
+
+
+putPostScript :: Put.Putter PostScript
+putPostScript =
+  encodeMessage . toProtoPostScript
+
+
+fromProtoPostScript :: Proto.PostScript -> PostScript
+fromProtoPostScript raw =
+  PostScript
+    (getField $ Proto.footerLength raw)
+    (fmap fromProtoCompressionKind $ getField $ Proto.compression raw)
+    (getField $ Proto.compressionBlockSize raw)
+    (getField $ Proto.version raw)
+    (getField $ Proto.metadataLength raw)
+    (getField $ Proto.magic raw)
+
+
+toProtoPostScript :: PostScript -> Proto.PostScript
+toProtoPostScript hydrated =
+  Proto.PostScript
+    (putField $ footerLength hydrated)
+    (putField $ fmap toProtoCompressionKind $ compression hydrated)
+    (putField $ compressionBlockSize hydrated)
+    (putField $ version hydrated)
+    (putField $ metadataLength hydrated)
+    (putField $ magic hydrated)
+
 
 data Footer = Footer {
     -- the length of the file header in bytes (always 3)
@@ -115,6 +161,19 @@ fromProtoFooter raw =
     <*> pure (getField $ Proto.rowIndexStride raw)
 
 
+toProtoFooter :: Footer -> Proto.Footer
+toProtoFooter hydrated =
+  Proto.Footer
+    (putField $ headerLength hydrated)
+    (putField $ contentLength hydrated)
+    (putField $ fmap toStripeInformation $ stripes hydrated)
+    (putField $ toTypes $ types hydrated)
+    (putField $ fmap toUserMetadataItem  $ metadata hydrated)
+    (putField $ numberOfRows hydrated)
+    (putField $ mempty)
+    (putField $ rowIndexStride hydrated)
+
+
 data StripeInformation = StripeInformation {
     -- the start of the stripe within the file
     offset :: Maybe Word64
@@ -138,6 +197,17 @@ fromStripeInformation raw =
     (getField $ Proto.siFooterLength raw)
     (getField $ Proto.siNumberOfRows raw)
 
+
+toStripeInformation :: StripeInformation -> Proto.StripeInformation
+toStripeInformation raw =
+  Proto.StripeInformation
+    (putField $ offset raw)
+    (putField $ indexLength raw)
+    (putField $ dataLength raw)
+    (putField $ siFooterLength raw)
+    (putField $ siNumberOfRows raw)
+
+
 data Type =
     BOOLEAN
   | BYTE
@@ -159,19 +229,6 @@ data Type =
   | CHAR
   deriving (Show, Eq, Ord)
 
--- data Type = Type {
---   -- the kind of this type
---   kind ::Proto.Kind
---   -- the type ids of any subcolumns for list, map, struct, or union
--- , subtypes :: [Word32]
---   -- the list of field names for struct
--- , fieldNames :: [Text]
---   -- the maximum length of the type for varchar or char in UTF-8 characters
--- , maximumLength :: Maybe Word32
---   -- the precision and scale for decimal
--- , precision :: Maybe Word32
--- , scale :: Maybe Word32
--- } deriving (Eq, Ord, Show, Generic)
 
 fromTypes :: [Proto.Type] -> Either String Type
 fromTypes typs
@@ -185,7 +242,7 @@ fromTypes typs
     if null leftovers then
       Right typ
     else
-      Left $ "Leftovers! Coundn't parse " <> show typs
+      Left $ "Leftovers! Coundn't parse " <> show typs <> "\n\n\nLeftovers: " <> show leftovers
 
     where
 
@@ -259,6 +316,82 @@ fromTypes typs
               ts
         in
           (UNION fields, rest)
+
+
+toTypes :: Type -> [Proto.Type]
+toTypes hydrated =
+  fst $ go hydrated 0
+    where
+  simple k =
+    Proto.Type {
+      Proto.kind = putField k
+    , Proto.subtypes = mempty
+    , Proto.fieldNames = mempty
+    , Proto.maximumLength = mempty
+    , Proto.precision = mempty
+    , Proto.scale = mempty
+    }
+
+  withSubs k s f =
+    (simple k) {
+      Proto.subtypes = putField [s + 1 .. f - 1]
+    }
+
+  withSubsFields k s f fs =
+    (withSubs k s f) {
+      Proto.fieldNames = putField (fmap getFieldName fs)
+    }
+
+  go h n = case h of
+    BOOLEAN ->
+      ([simple Proto.BOOLEAN], n + 1)
+    BYTE ->
+      ([simple Proto.BYTE], n + 1)
+    SHORT ->
+      ([simple Proto.SHORT], n + 1)
+    INT ->
+      ([simple Proto.INT], n + 1)
+    LONG ->
+      ([simple Proto.LONG], n + 1)
+    FLOAT ->
+      ([simple Proto.FLOAT], n + 1)
+    DOUBLE ->
+      ([simple Proto.DOUBLE], n + 1)
+    STRING ->
+      ([simple Proto.STRING], n + 1)
+    BINARY ->
+      ([simple Proto.BINARY], n + 1)
+    TIMESTAMP ->
+      ([simple Proto.TIMESTAMP], n + 1)
+    DECIMAL ->
+      ([simple Proto.DECIMAL], n + 1)
+    DATE ->
+      ([simple Proto.DATE], n + 1)
+    VARCHAR ->
+      ([simple Proto.VARCHAR], n + 1)
+    CHAR ->
+      ([simple Proto.CHAR], n + 1)
+    LIST inner ->
+      let (inner1, ix) = go inner (n + 1)
+      in  (withSubs Proto.LIST n ix : inner1, ix)
+    MAP k0 v0 ->
+      let (k1, kn) = go k0 n
+          (v1, vx) = go v0 kn
+      in  (withSubs Proto.MAP n vx : k1 <> v1, vx)
+    STRUCT fs ->
+      let step :: (([StructFieldName], [Proto.Type]), Word32) -> StructField Type -> (([StructFieldName], [Proto.Type]), Word32)
+          step ((fn, acc), s) f =
+            let (f1, ix) = go (fieldValue f) s
+            in  ((fn <> [fieldName f], acc <> f1), ix)
+          ((fn, k1), kn) = foldl step (([],[]), n + 1) fs
+      in  (withSubsFields Proto.STRUCT n kn fn : k1, kn)
+    UNION alts ->
+      let step :: ([Proto.Type], Word32) -> Type -> ([Proto.Type], Word32)
+          step (acc, s) f =
+            let (f1, ix) = go f s
+            in  (acc <> f1, ix)
+          (k1, kn) = foldl step ([], n + 1) alts
+      in  (withSubs Proto.UNION n kn : k1, kn)
 
 data ColumnStatistics = ColumnStatistics {
  -- the number of values
@@ -360,6 +493,13 @@ fromUserMetadataItem raw =
     (getField $ Proto.value raw)
 
 
+toUserMetadataItem :: UserMetadataItem -> Proto.UserMetadataItem
+toUserMetadataItem raw =
+  Proto.UserMetadataItem
+    (putField $ name raw)
+    (putField $ value raw)
+
+
 data RowIndexEntry = RowIndexEntry {
     positions :: [Word64]
   , rowIndexStatistics :: Maybe ColumnStatistics
@@ -371,6 +511,13 @@ fromRowIndexEntry raw =
   RowIndexEntry
     (getField $ Proto.positions raw)
     (fmap fromColumnStatistics . getField $ Proto.rowIndexStatistics raw)
+
+
+toRowIndexEntry :: RowIndexEntry -> Proto.RowIndexEntry
+toRowIndexEntry raw =
+  Proto.RowIndexEntry
+    (putField $ positions raw)
+    (mempty)
 
 
 newtype RowIndex = RowIndex {
@@ -387,6 +534,12 @@ fromRowIndex :: Proto.RowIndex -> RowIndex
 fromRowIndex raw =
   RowIndex
     (fmap fromRowIndexEntry . getField $ Proto.entry raw)
+
+
+toRowIndex :: RowIndex -> Proto.RowIndex
+toRowIndex raw =
+  Proto.RowIndex
+    (putField $ fmap toRowIndexEntry $ entry raw)
 
 
 data StripeFooter = StripeFooter {

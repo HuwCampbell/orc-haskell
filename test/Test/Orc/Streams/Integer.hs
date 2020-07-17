@@ -9,15 +9,13 @@ import qualified Data.Serialize.Put as Put
 import qualified Data.ByteString as Strict
 
 import qualified Data.Vector.Storable as Storable
-import           Data.Word (Word64)
 
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-import           P
-
-import           System.IO (IO)
+import           Orc.Prelude
+import           Prelude (minBound, maxBound)
 
 import           Orc.Serial.Encodings.Integers
 

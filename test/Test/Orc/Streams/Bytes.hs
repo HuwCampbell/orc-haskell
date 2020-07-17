@@ -10,9 +10,8 @@ import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-import           P
-
-import           System.IO (IO)
+import           Orc.Prelude
+import           Prelude (maxBound)
 
 import           Orc.Serial.Encodings.Bytes
 
