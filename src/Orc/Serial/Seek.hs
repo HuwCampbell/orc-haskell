@@ -41,11 +41,14 @@ import qualified Data.ByteString.Streaming as ByteStream
 import           Orc.Data.Segmented
 import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed, prevIndex)
 import           Orc.Schema.Types as Orc
+
+import           Orc.Serial.Protobuf.Schema as Orc
 import           Orc.Serial.Encodings.Bytes
 import           Orc.Serial.Encodings.Compression
 import           Orc.Serial.Encodings.Integers
 import           Orc.Serial.Encodings.OrcNum
 import           Orc.Serial.Json.Logical (ppJsonRow)
+
 import           Orc.Table.Striped (Column (..))
 import           Orc.Table.Convert (streamLogical)
 import qualified Orc.Table.Logical as Logical
@@ -145,7 +148,7 @@ checkMagic handle = do
   header <- liftIO (ByteString.hGet handle 3)
 
   unless (header == "ORC") $
-    left (show header)
+    left "Invalid header - probably not an ORC file."
 
   -- Seek to the last byte of the file to get the
   -- size of the postscript.

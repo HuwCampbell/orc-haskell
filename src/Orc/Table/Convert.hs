@@ -8,29 +8,34 @@
 module Orc.Table.Convert (
     toLogical
   , streamLogical
+
+  , fromLogical
+  , streamFromLogical
 ) where
 
 import           Control.Monad.State (runState, put, get)
+import           Control.Monad.Trans.Either (EitherT, hoistEither)
 
 import           Streaming (Of (..))
+import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
 
 import           Orc.Data.Data (StructField (..))
-import           Orc.Data.Time (Day (..), Timestamp (..))
+import qualified Orc.Data.Time as Orc
 import           Orc.Schema.Types as Orc
 
 import qualified Orc.Table.Striped as Striped
-import qualified Orc.Table.Logical as Logical
+import           Orc.Table.Logical as Logical
+
 import           Orc.X.Vector (safeHead)
 import qualified Orc.X.Vector.Segment as Segment
 import           Orc.X.Vector.Transpose (transpose)
-import qualified Orc.Data.Time as Orc
 
 import           Orc.Prelude
 
-import           Data.ByteString (ByteString)
+import           Data.String (String)
 import qualified Data.Vector as Boxed
-import           Data.Word (Word8)
+import qualified Data.Vector.Storable as Storable
 
 
 streamLogical
@@ -88,7 +93,7 @@ toLogical stripeInfo =
           Boxed.convert bools
 
         taken =
-          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) $ siNumberOfRows stripeInfo
+          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) (siNumberOfRows stripeInfo)
 
       in
         fmap Logical.Bool taken
@@ -137,7 +142,7 @@ toLogical stripeInfo =
         boxed =
           Boxed.convert x
       in
-        fmap (Logical.Date . Day) $
+        fmap (Logical.Date . Orc.Day) $
           boxed
 
     Striped.Timestamp seconds nanos ->
@@ -147,7 +152,7 @@ toLogical stripeInfo =
         nanos_ =
           Boxed.convert nanos
       in
-        Boxed.zipWith (Logical.Timestamp ... Timestamp) seconds_ nanos_
+        Boxed.zipWith (Logical.Timestamp ... Orc.Timestamp) seconds_ nanos_
 
     Striped.Float x ->
       let
@@ -184,7 +189,7 @@ toLogical stripeInfo =
           Boxed.convert present
 
         taken =
-          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) $ siNumberOfRows stripeInfo
+          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) (siNumberOfRows stripeInfo)
 
       in
         fmap Logical.Partial $
@@ -193,9 +198,9 @@ toLogical stripeInfo =
               if here then do
                 current <- get
                 let
-                  value = activeRows Boxed.! current
+                  partials = activeRows Boxed.! current
                 put $ current + 1
-                pure (Just' value)
+                pure (Just' partials)
               else
                 pure Nothing'
 
@@ -220,98 +225,131 @@ toLogical stripeInfo =
 
 
 
+streamFromLogical
+  :: Monad m
+  => Int
+  -> Type
+  -> Streaming.Stream (Of Logical.Row) (EitherT String m) x
+  -> Streaming.Stream (Of Striped.Column) (EitherT String m) x
+streamFromLogical chunkSize schema =
+  Streaming.mapM (hoistEither . fromLogical schema . Boxed.fromList) .
+    Streaming.mapped (Streaming.toList) .
+      Streaming.chunksOf chunkSize
 
 
-fromLogical :: Boxed.Vector Logical.Row -> Maybe Striped.Column
-fromLogical rows =
+
+fromLogical :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
+fromLogical schema rows =
   case safeHead rows of
-    Just (Logical.Bool _) ->
+    Just (Logical.Partial _) -> do
+      partials <- note "Take Partials" $ traverse takePartials rows
+      ms       <- fromLogical schema (Boxed.fromList $ catMaybes' $ Boxed.toList partials)
+      let
+        ps = fmap (isJust') partials
+      return $
+        Striped.Partial (Storable.convert ps) ms
+
+    _ ->
+      fromLogical' schema rows
+
+
+fromLogical' :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
+fromLogical' schema rows =
+  case schema of
+    BOOLEAN ->
+      note "Bool" $
       Striped.Bool . Boxed.convert <$>
         traverse takeBool rows
-    Just (Logical.Bytes _) ->
+    BYTE ->
+      note "Bytes" $
       Striped.Bytes . Boxed.convert <$>
         traverse takeBytes rows
-    Just (Logical.Short _) ->
+    SHORT ->
+      note "Short" $
       Striped.Short . Boxed.convert <$>
         traverse takeShort rows
-    Just (Logical.Integer _) ->
+    INT ->
+      note "Integer" $
       Striped.Integer . Boxed.convert <$>
         traverse takeInteger rows
-    Just (Logical.Long _) ->
+    LONG ->
+      note "Long" $
       Striped.Long . Boxed.convert <$>
         traverse takeLong rows
-    Just (Logical.Date _) ->
+    DATE ->
+      note "Date" $
       Striped.Date . Boxed.convert <$>
         traverse takeDate rows
-    Just (Logical.Float _) ->
+    FLOAT ->
+      note "Float" $
       Striped.Float . Boxed.convert <$>
         traverse takeFloat rows
-    Just (Logical.Double _) ->
+
+    DOUBLE ->
+      note "Double" $
       Striped.Double . Boxed.convert <$>
         traverse takeDouble rows
 
-    Just (Logical.String _) ->
+    STRING ->
+      note "String" $
       Striped.String <$>
         traverse takeString rows
 
-    Just (Logical.Struct ff) -> do
-      rows_  <- traverse takeStruct rows
-      cols   <- traverse fromLogical (transpose rows_)
+    CHAR ->
+      note "Char" $
+      Striped.Char <$>
+        traverse takeChar rows
+
+    VARCHAR ->
+      note "VarChar" $
+      Striped.VarChar <$>
+        traverse takeVarChar rows
+
+    BINARY ->
+      note "Binary" $
+      Striped.Binary <$>
+        traverse takeBinary rows
+
+    STRUCT fts -> do
+      rows_  <- note "Take Struct" $ traverse takeStruct rows
       let
-        names = fmap fieldName ff
+        cols0 = transpose rows_
+        colsX = Boxed.zip (Boxed.fromList $ fmap fieldValue fts) cols0
+        names = Boxed.fromList (fmap fieldName fts)
+
+      cols   <- traverse (uncurry fromLogical) colsX
+
       return $
         Striped.Struct $ Boxed.zipWith StructField names cols
 
-    Just (Logical.List _) -> do
-      rows_  <- traverse takeList rows
+    LIST t -> do
+      rows_  <- note "Take List" $ traverse takeList rows
       let
         lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
+      ls0    <- traverse (fromLogical t) rows_ <|> pure (Boxed.empty)
+      ls1    <- Striped.concat (toList ls0)
       return $
-        Striped.List lens undefined
+        Striped.List lens ls1
 
+    MAP kt vt -> do
+      rows_  <- note "Take Map" $ traverse takeMap rows
+      let
+        ks    = fmap (fmap fst) rows_
+        vs    = fmap (fmap snd) rows_
+        lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
+      ks0    <- traverse (fromLogical kt) ks
+      ks1    <- Striped.concat (toList ks0)
+      vs0    <- traverse (fromLogical vt) vs
+      vs1    <- Striped.concat (toList vs0)
+      return $
+        Striped.Map lens ks1 vs1
 
-takeString :: Logical.Row -> Maybe ByteString
-takeString (Logical.String x) = Just x
-takeString _                  = Nothing
+    UNION _ -> do
+      _rows_  <- note "Take Union" $ traverse takeUnion rows
+      Left "Not finished UNION"
 
-takeBool :: Logical.Row -> Maybe Bool
-takeBool (Logical.Bool x) = Just x
-takeBool _                = Nothing
+    TIMESTAMP ->
+      Left "Not finished TIMESTAMP"
 
-takeBytes :: Logical.Row -> Maybe Word8
-takeBytes (Logical.Bytes x) = Just x
-takeBytes _                 = Nothing
-
-takeShort :: Logical.Row -> Maybe Int16
-takeShort (Logical.Short x) = Just x
-takeShort _                 = Nothing
-
-takeInteger :: Logical.Row -> Maybe Int32
-takeInteger (Logical.Integer x) = Just x
-takeInteger _                   = Nothing
-
-takeLong :: Logical.Row -> Maybe Int64
-takeLong (Logical.Long x) = Just x
-takeLong _                = Nothing
-
-takeDate :: Logical.Row -> Maybe Int64
-takeDate (Logical.Date (Orc.Day x)) = Just x
-takeDate _                          = Nothing
-
-takeFloat :: Logical.Row -> Maybe Float
-takeFloat (Logical.Float x) = Just x
-takeFloat _                 = Nothing
-
-takeDouble :: Logical.Row -> Maybe Double
-takeDouble (Logical.Double x) = Just x
-takeDouble _                  = Nothing
-
-takeStruct :: Logical.Row -> Maybe (Boxed.Vector Logical.Row)
-takeStruct (Logical.Struct x) = Just (fmap fieldValue x)
-takeStruct _                  = Nothing
-
-takeList :: Logical.Row -> Maybe (Boxed.Vector Logical.Row)
-takeList (Logical.List x) = Just x
-takeList _                = Nothing
-
-
+    DECIMAL -> do
+      Left "Not finished DECIMAL"

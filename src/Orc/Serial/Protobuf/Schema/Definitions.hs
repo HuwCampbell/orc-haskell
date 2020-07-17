@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds     #-}
 
-module Orc.Schema.Protobuf.Definitions where
+module Orc.Serial.Protobuf.Schema.Definitions where
 
 import Data.Int
 import Data.ByteString

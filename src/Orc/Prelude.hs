@@ -122,6 +122,7 @@ module Orc.Prelude (
   , isJust'
   , isNothing'
   , maybe'
+  , catMaybes'
 
   -- * Combinators
   , id
@@ -442,3 +443,7 @@ fromMaybe' _ (Just' y) = y
 
 fromMaybeM' :: Applicative f => f a -> Maybe' a -> f a
 fromMaybeM' = flip maybe' pure
+
+catMaybes' :: [Maybe' a] -> [a]
+catMaybes' as =
+  [ a | Just' a <- toList as ]

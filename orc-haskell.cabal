@@ -29,7 +29,6 @@ library
 
                        Orc.Prelude
 
-                       Orc.Schema.Protobuf.Definitions
                        Orc.Schema.Types
 
                        Orc.Serial.Encodings.Bytes
@@ -41,6 +40,9 @@ library
                        Orc.Serial.Seek
 
                        Orc.Serial.Json.Logical
+
+                       Orc.Serial.Protobuf.Schema
+                       Orc.Serial.Protobuf.Schema.Definitions
 
                        Orc.Table.Convert
                        Orc.Table.Logical
