@@ -126,6 +126,7 @@ module Orc.Prelude (
   -- * Combinators
   , id
   , (.)
+  , (...)
   , ($)
   , ($!)
   , (&)
@@ -416,6 +417,11 @@ instance Monad Maybe' where
 
 instance Fail.MonadFail Maybe' where
   fail _ = Nothing'
+
+
+(...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+(...) = (.) . (.)
+{-# INLINE (...) #-}
 
 
 maybe' :: b -> (a -> b) -> Maybe' a -> b

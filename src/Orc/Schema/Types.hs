@@ -4,39 +4,51 @@
 
 module Orc.Schema.Types (
     CompressionKind (..)
-  , Proto.StreamKind (..)
-  , Proto.ColumnEncodingKind (..)
+  , StreamKind (..)
+  , ColumnEncodingKind (..)
+  , Type (..)
+  , StripeInformation (..)
+  , ColumnEncoding (..)
+  , Stream (..)
 
   , PostScript (..)
   , readPostScript
+  , putPostScript
 
   , Footer (..)
   , readFooter
-  , Type (..)
+  , putFooter
 
   , StripeFooter (..)
   , readStripeFooter
-  , StripeInformation (..)
-  , ColumnEncoding (..)
+  , putStripeFooter
 
   , RowIndexEntry (..)
   , RowIndex (..)
   , readRowIndex
-
-  , Stream (..)
-  , readStream
+  , putRowIndex
 
 
+  -- * Low level protobuffer transformations
+  , fromProtoFooter
+  , toProtoFooter
 
-  , toTypes
-  , fromTypes
+  , toProtoTypes
+  , fromProtoTypes
+
+  , fromProtoStream
+  , toProtoStream
+
+  , fromProtoPostScript
+  , toProtoPostScript
   ) where
 
 import           Data.Int
 import           Data.ByteString (ByteString)
-import           Data.Word
+import           Data.Foldable (foldl')
 import           Data.ProtocolBuffers
 import           Data.Text (Text)
+import           Data.Word
 import           GHC.Generics (Generic)
 import           Data.Traversable (for)
 
@@ -148,13 +160,18 @@ readFooter :: ByteString -> Either String Footer
 readFooter bytes =
   fromProtoFooter =<< Get.runGet decodeMessage bytes
 
+
+putFooter :: Put.Putter Footer
+putFooter =
+  encodeMessage . toProtoFooter
+
 fromProtoFooter :: Proto.Footer -> Either String Footer
 fromProtoFooter raw =
   Footer
     (getField $ Proto.headerLength raw)
     (getField $ Proto.contentLength raw)
     (fmap fromStripeInformation . getField $ Proto.stripes raw)
-    <$> (fromTypes . getField $ Proto.types raw)
+    <$> (fromProtoTypes . getField $ Proto.types raw)
     <*> pure (fmap fromUserMetadataItem . getField $ Proto.metadata raw)
     <*> pure (getField $ Proto.numberOfRows raw)
     <*> pure (fmap fromColumnStatistics $ getField $ Proto.statistics raw)
@@ -167,7 +184,7 @@ toProtoFooter hydrated =
     (putField $ headerLength hydrated)
     (putField $ contentLength hydrated)
     (putField $ fmap toStripeInformation $ stripes hydrated)
-    (putField $ toTypes $ types hydrated)
+    (putField $ toProtoTypes $ types hydrated)
     (putField $ fmap toUserMetadataItem  $ metadata hydrated)
     (putField $ numberOfRows hydrated)
     (putField $ mempty)
@@ -230,8 +247,8 @@ data Type =
   deriving (Show, Eq, Ord)
 
 
-fromTypes :: [Proto.Type] -> Either String Type
-fromTypes typs
+fromProtoTypes :: [Proto.Type] -> Either String Type
+fromProtoTypes typs
   | null typs
   = Left "Can't parse no types to a type. This is probably a protobuf error"
   | otherwise
@@ -318,8 +335,8 @@ fromTypes typs
           (UNION fields, rest)
 
 
-toTypes :: Type -> [Proto.Type]
-toTypes hydrated =
+toProtoTypes :: Type -> [Proto.Type]
+toProtoTypes hydrated =
   fst $ go hydrated 0
     where
   simple k =
@@ -332,13 +349,13 @@ toTypes hydrated =
     , Proto.scale = mempty
     }
 
-  withSubs k s f =
+  withSubs k ss =
     (simple k) {
-      Proto.subtypes = putField [s + 1 .. f - 1]
+      Proto.subtypes = putField ss
     }
 
-  withSubsFields k s f fs =
-    (withSubs k s f) {
+  withSubsFields k ss fs =
+    (withSubs k ss) {
       Proto.fieldNames = putField (fmap getFieldName fs)
     }
 
@@ -373,25 +390,23 @@ toTypes hydrated =
       ([simple Proto.CHAR], n + 1)
     LIST inner ->
       let (inner1, ix) = go inner (n + 1)
-      in  (withSubs Proto.LIST n ix : inner1, ix)
+      in  (withSubs Proto.LIST [n+1] : inner1, ix)
     MAP k0 v0 ->
-      let (k1, kn) = go k0 n
+      let (k1, kn) = go k0 (n+1)
           (v1, vx) = go v0 kn
-      in  (withSubs Proto.MAP n vx : k1 <> v1, vx)
+      in  (withSubs Proto.MAP [n+1,kn] : k1 <> v1, vx)
     STRUCT fs ->
-      let step :: (([StructFieldName], [Proto.Type]), Word32) -> StructField Type -> (([StructFieldName], [Proto.Type]), Word32)
-          step ((fn, acc), s) f =
+      let step ((children0, acc), s) f =
             let (f1, ix) = go (fieldValue f) s
-            in  ((fn <> [fieldName f], acc <> f1), ix)
-          ((fn, k1), kn) = foldl step (([],[]), n + 1) fs
-      in  (withSubsFields Proto.STRUCT n kn fn : k1, kn)
+            in  ((children0 <> [fmap (const s) f], acc <> f1), ix)
+          ((children, k1), kn) = foldl' step (([],[]), n + 1) fs
+      in  (withSubsFields Proto.STRUCT (fmap fieldValue children) (fmap fieldName children) : k1, kn)
     UNION alts ->
-      let step :: ([Proto.Type], Word32) -> Type -> ([Proto.Type], Word32)
-          step (acc, s) f =
+      let step ((children0, acc), s) f =
             let (f1, ix) = go f s
-            in  (acc <> f1, ix)
-          (k1, kn) = foldl step ([], n + 1) alts
-      in  (withSubs Proto.UNION n kn : k1, kn)
+            in  ((children0 <> [s], acc <> f1), ix)
+          ((children, k1), kn) = foldl' step (([],[]), n + 1) alts
+      in  (withSubs Proto.UNION children : k1, kn)
 
 data ColumnStatistics = ColumnStatistics {
  -- the number of values
@@ -530,6 +545,12 @@ readRowIndex bytes =
   fromRowIndex <$> Get.runGet decodeMessage bytes
 
 
+putRowIndex :: Put.Putter RowIndex
+putRowIndex =
+  encodeMessage . toRowIndex
+
+
+
 fromRowIndex :: Proto.RowIndex -> RowIndex
 fromRowIndex raw =
   RowIndex
@@ -556,44 +577,119 @@ readStripeFooter bytes =
   fromStripeFooter <$> Get.runGet decodeMessage bytes
 
 
+putStripeFooter :: Put.Putter StripeFooter
+putStripeFooter =
+  encodeMessage . toProtoStripeFooter
+
+
 fromStripeFooter :: Proto.StripeFooter -> StripeFooter
 fromStripeFooter raw =
   StripeFooter
-    (fmap fromStream . getField $ Proto.streams raw)
-    (fmap fromColumnEncoding . getField $ Proto.columns raw)
+    (fmap fromProtoStream . getField $ Proto.streams raw)
+    (fmap fromProtoColumnEncoding . getField $ Proto.columns raw)
     (getField $ Proto.writerTimezone raw)
 
+toProtoStripeFooter :: StripeFooter -> Proto.StripeFooter
+toProtoStripeFooter hydrated =
+  Proto.StripeFooter
+    (putField $ fmap toProtoStream $ streams hydrated)
+    (putField $ fmap toProtoColumnEncoding $ columns hydrated)
+    (putField $ writerTimezone hydrated)
+
+
+data StreamKind
+  = SK_PRESENT
+  | SK_DATA
+  | SK_LENGTH
+  | SK_DICTIONARY_DATA
+  | SK_DICTIONARY_COUNT
+  | SK_SECONDARY
+  | SK_ROW_INDEX
+  | SK_BLOOM_FILTER
+  deriving (Eq, Ord, Show, Enum)
+
+fromProtoStreamKind :: Proto.StreamKind -> StreamKind
+fromProtoStreamKind = \case
+  Proto.SK_PRESENT -> SK_PRESENT
+  Proto.SK_DATA -> SK_DATA
+  Proto.SK_LENGTH -> SK_LENGTH
+  Proto.SK_DICTIONARY_DATA -> SK_DICTIONARY_DATA
+  Proto.SK_DICTIONARY_COUNT -> SK_DICTIONARY_COUNT
+  Proto.SK_SECONDARY -> SK_SECONDARY
+  Proto.SK_ROW_INDEX -> SK_ROW_INDEX
+  Proto.SK_BLOOM_FILTER -> SK_BLOOM_FILTER
+
+toProtoStreamKind :: StreamKind -> Proto.StreamKind
+toProtoStreamKind = \case
+  SK_PRESENT -> Proto.SK_PRESENT
+  SK_DATA -> Proto.SK_DATA
+  SK_LENGTH -> Proto.SK_LENGTH
+  SK_DICTIONARY_DATA -> Proto.SK_DICTIONARY_DATA
+  SK_DICTIONARY_COUNT -> Proto.SK_DICTIONARY_COUNT
+  SK_SECONDARY -> Proto.SK_SECONDARY
+  SK_ROW_INDEX -> Proto.SK_ROW_INDEX
+  SK_BLOOM_FILTER -> Proto.SK_BLOOM_FILTER
 
 data Stream = Stream {
   -- if you add new index stream kinds, you need to make sure to update
   -- StreamName to ensure it is added to the stripe in the right area
-  streamKind   :: Maybe Proto.StreamKind
+  streamKind   :: Maybe StreamKind
 , streamColumn :: Maybe Word32
 , streamLength :: Maybe Word64
 } deriving (Eq, Ord, Show)
 
 
-readStream :: ByteString -> Either String Stream
-readStream bytes =
-  fromStream <$> Get.runGet decodeMessage bytes
-
-
-fromStream :: Proto.Stream -> Stream
-fromStream raw =
+fromProtoStream :: Proto.Stream -> Stream
+fromProtoStream raw =
   Stream
-    (getField $ Proto.streamKind raw)
+    (fmap fromProtoStreamKind $ getField $ Proto.streamKind raw)
     (getField $ Proto.streamColumn raw)
     (getField $ Proto.streamLength raw)
 
 
+toProtoStream :: Stream -> Proto.Stream
+toProtoStream raw =
+  Proto.Stream
+    (putField $ fmap toProtoStreamKind $ streamKind raw)
+    (putField $ streamColumn raw)
+    (putField $ streamLength raw)
+
+
+data ColumnEncodingKind
+  = DIRECT
+  | DICTIONARY
+  | DIRECT_V2
+  | DICTIONARY_V2
+  deriving (Eq, Ord, Show, Enum)
+
+fromProtoColumnEncodingKind :: Proto.ColumnEncodingKind -> ColumnEncodingKind
+fromProtoColumnEncodingKind = \case
+  Proto.DIRECT -> DIRECT
+  Proto.DICTIONARY -> DICTIONARY
+  Proto.DIRECT_V2 -> DIRECT_V2
+  Proto.DICTIONARY_V2 -> DICTIONARY_V2
+
+toProtoColumnEncodingKind :: ColumnEncodingKind -> Proto.ColumnEncodingKind
+toProtoColumnEncodingKind = \case
+  DIRECT -> Proto.DIRECT
+  DICTIONARY -> Proto.DICTIONARY
+  DIRECT_V2 -> Proto.DIRECT_V2
+  DICTIONARY_V2 -> Proto.DICTIONARY_V2
+
 data ColumnEncoding = ColumnEncoding {
-  columnEncodingKind :: Proto.ColumnEncodingKind
+  columnEncodingKind :: ColumnEncodingKind
 , columnEncodingdictionarySize :: Maybe Word32
 } deriving (Eq, Ord, Show)
 
 
-fromColumnEncoding :: Proto.ColumnEncoding -> ColumnEncoding
-fromColumnEncoding raw =
+fromProtoColumnEncoding :: Proto.ColumnEncoding -> ColumnEncoding
+fromProtoColumnEncoding raw =
   ColumnEncoding
-    (getField $ Proto.columnEncodingKind raw)
+    (fromProtoColumnEncodingKind $ getField $ Proto.columnEncodingKind raw)
     (getField $ Proto.columnEncodingdictionarySize raw)
+
+toProtoColumnEncoding :: ColumnEncoding -> Proto.ColumnEncoding
+toProtoColumnEncoding raw =
+  Proto.ColumnEncoding
+    (putField $ toProtoColumnEncodingKind $ columnEncodingKind raw)
+    (putField $ columnEncodingdictionarySize raw)

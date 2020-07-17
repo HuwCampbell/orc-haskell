@@ -21,12 +21,16 @@ import           Orc.Schema.Types as Orc
 
 import qualified Orc.Table.Striped as Striped
 import qualified Orc.Table.Logical as Logical
-import           Orc.X.Vector.Segment as Segment
+import           Orc.X.Vector (safeHead)
+import qualified Orc.X.Vector.Segment as Segment
 import           Orc.X.Vector.Transpose (transpose)
+import qualified Orc.Data.Time as Orc
 
 import           Orc.Prelude
 
+import           Data.ByteString (ByteString)
 import qualified Data.Vector as Boxed
+import           Data.Word (Word8)
 
 
 streamLogical
@@ -216,5 +220,98 @@ toLogical stripeInfo =
 
 
 
-(...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
-(...) = (.) . (.)
+
+
+fromLogical :: Boxed.Vector Logical.Row -> Maybe Striped.Column
+fromLogical rows =
+  case safeHead rows of
+    Just (Logical.Bool _) ->
+      Striped.Bool . Boxed.convert <$>
+        traverse takeBool rows
+    Just (Logical.Bytes _) ->
+      Striped.Bytes . Boxed.convert <$>
+        traverse takeBytes rows
+    Just (Logical.Short _) ->
+      Striped.Short . Boxed.convert <$>
+        traverse takeShort rows
+    Just (Logical.Integer _) ->
+      Striped.Integer . Boxed.convert <$>
+        traverse takeInteger rows
+    Just (Logical.Long _) ->
+      Striped.Long . Boxed.convert <$>
+        traverse takeLong rows
+    Just (Logical.Date _) ->
+      Striped.Date . Boxed.convert <$>
+        traverse takeDate rows
+    Just (Logical.Float _) ->
+      Striped.Float . Boxed.convert <$>
+        traverse takeFloat rows
+    Just (Logical.Double _) ->
+      Striped.Double . Boxed.convert <$>
+        traverse takeDouble rows
+
+    Just (Logical.String _) ->
+      Striped.String <$>
+        traverse takeString rows
+
+    Just (Logical.Struct ff) -> do
+      rows_  <- traverse takeStruct rows
+      cols   <- traverse fromLogical (transpose rows_)
+      let
+        names = fmap fieldName ff
+      return $
+        Striped.Struct $ Boxed.zipWith StructField names cols
+
+    Just (Logical.List _) -> do
+      rows_  <- traverse takeList rows
+      let
+        lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
+      return $
+        Striped.List lens undefined
+
+
+takeString :: Logical.Row -> Maybe ByteString
+takeString (Logical.String x) = Just x
+takeString _                  = Nothing
+
+takeBool :: Logical.Row -> Maybe Bool
+takeBool (Logical.Bool x) = Just x
+takeBool _                = Nothing
+
+takeBytes :: Logical.Row -> Maybe Word8
+takeBytes (Logical.Bytes x) = Just x
+takeBytes _                 = Nothing
+
+takeShort :: Logical.Row -> Maybe Int16
+takeShort (Logical.Short x) = Just x
+takeShort _                 = Nothing
+
+takeInteger :: Logical.Row -> Maybe Int32
+takeInteger (Logical.Integer x) = Just x
+takeInteger _                   = Nothing
+
+takeLong :: Logical.Row -> Maybe Int64
+takeLong (Logical.Long x) = Just x
+takeLong _                = Nothing
+
+takeDate :: Logical.Row -> Maybe Int64
+takeDate (Logical.Date (Orc.Day x)) = Just x
+takeDate _                          = Nothing
+
+takeFloat :: Logical.Row -> Maybe Float
+takeFloat (Logical.Float x) = Just x
+takeFloat _                 = Nothing
+
+takeDouble :: Logical.Row -> Maybe Double
+takeDouble (Logical.Double x) = Just x
+takeDouble _                  = Nothing
+
+takeStruct :: Logical.Row -> Maybe (Boxed.Vector Logical.Row)
+takeStruct (Logical.Struct x) = Just (fmap fieldValue x)
+takeStruct _                  = Nothing
+
+takeList :: Logical.Row -> Maybe (Boxed.Vector Logical.Row)
+takeList (Logical.List x) = Just x
+takeList _                = Nothing
+
+

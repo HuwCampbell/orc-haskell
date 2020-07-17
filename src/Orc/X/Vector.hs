@@ -10,6 +10,8 @@ module Orc.X.Vector (
     xmapM
   , ximapM
   , xmapMaybe
+  , uncons
+  , safeHead
 ) where
 
 import           Orc.Prelude
@@ -20,6 +22,22 @@ import qualified Data.Vector.Generic.Mutable as MVector
 import           Data.Vector.Generic.Mutable (MVector)
 
 import           Control.Monad.ST
+
+
+safeHead :: Vector v a => v a -> Maybe a
+safeHead v =
+  if Vector.null v then
+    Nothing
+  else
+    Just (Vector.unsafeHead v)
+
+uncons :: Vector v a => v a -> Maybe (a, v a)
+uncons v =
+  if Vector.null v then
+    Nothing
+  else
+    Just (Vector.unsafeHead v, Vector.unsafeTail v)
+{-# INLINE uncons #-}
 
 
 xmapMaybe :: (Vector v a, Vector v b, MVector (Mutable v) b) => x -> (a -> Maybe b) -> v a -> Either x (v b)

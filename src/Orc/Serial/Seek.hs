@@ -6,6 +6,7 @@
 
 module Orc.Serial.Seek (
     withOrcFile
+  , withOrcStripes
   , withOrcStream
   , checkOrcFile
 
@@ -47,6 +48,7 @@ import           Orc.Serial.Encodings.OrcNum
 import           Orc.Serial.Json.Logical (ppJsonRow)
 import           Orc.Table.Striped (Column (..))
 import           Orc.Table.Convert (streamLogical)
+import qualified Orc.Table.Logical as Logical
 
 import           System.IO as IO
 
@@ -88,12 +90,12 @@ checkOrcFile file =
     return (stripeInfos, typeInfo, compression postScript)
 
 
-withOrcStream
+withOrcStripes
   :: MonadIO m
   => FilePath
   -> ((Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()) -> EitherT String IO r)
   -> EitherT String IO r
-withOrcStream file action =
+withOrcStripes file action =
   withOrcFile file $ \(handle, postScript, footer) -> do
     let
       stripeInfos =
@@ -108,13 +110,31 @@ withOrcStream file action =
         (Streaming.each stripeInfos)
 
 
+-- | Stream the values as a logical rows.
+--
+--   This is the most useful way to read an ORC file,
+--   but entails a pivot of all the values. If speed is
+--   key, one may wish to use  withOrcStripes and do a
+--   predicate pushdown first.
+withOrcStream
+  :: MonadIO m
+  => FilePath
+  -> ((Streaming.Stream (Of Logical.Row) (EitherT String m) ()) -> EitherT String IO r)
+  -> EitherT String IO r
+withOrcStream fs action =
+  withOrcStripes fs $
+    action . streamLogical
+
+-- | Simple pretty printer of ORC to JSON.
+--
+-- Serves a a demonstration of how to grab an ORC file and
+-- do something useful with it.
 printOrcFile :: FilePath -> EitherT String IO ()
 printOrcFile fp = do
   withOrcStream fp $
     ByteStream.stdout
       . ByteStream.concat
       . Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppJsonRow x) $> r)
-      . streamLogical
 
 
 -- | Checks that the magic values are present in the file
@@ -539,7 +559,3 @@ decodeStruct fields =
 liftMaybe :: MonadError e m => e -> Maybe a -> m a
 liftMaybe =
   liftEither ... note
-
-
-(...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
-(...) = (.) . (.)
