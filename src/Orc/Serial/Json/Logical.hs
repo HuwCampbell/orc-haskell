@@ -19,6 +19,9 @@ module Orc.Serial.Json.Logical (
 
 import           Orc.Prelude
 
+import           Control.Monad.IO.Class (MonadIO)
+import qualified Data.ByteString.Streaming as Streaming
+
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import           Data.Char (ord)
@@ -37,9 +40,10 @@ import qualified Orc.Data.Time as Orc
 import           Orc.Table.Logical (Row (..))
 
 
-ppJsonRow :: Row -> Lazy.ByteString
+
+ppJsonRow :: MonadIO m => Row -> Streaming.ByteString m ()
 ppJsonRow =
-  Builder.toLazyByteString . (<> Builder.char8 '\n') . buildRow
+  Streaming.toStreamingByteString . (<> Builder.char8 '\n') . buildRow
 
 
 -- | Render a row json.
@@ -233,8 +237,6 @@ builderUtf8_HMS nanos =
     <> pad2_ (fromIntegral s)
     <> "."
     <> lengthWord64 ns
-
-    -- <> prettyNanosecondsBuilderUtf8 sp nsRemainder
   where
     (h, mm) = nanos `divMod` 3600000000000
     (m, ss) = mm    `divMod`   60000000000

@@ -343,8 +343,8 @@ decodeColumnPart typs = do
       return $ Bool bits
 
     (BYTE, _) -> do
-      dataBytes      <- popStream
-      bytes          <- liftEither (decodeBytes dataBytes)
+      dataBytes <- popStream
+      bytes     <- liftEither (decodeBytes dataBytes)
       return $ Bytes bytes
 
     (SHORT, enc) -> do
@@ -361,7 +361,7 @@ decodeColumnPart typs = do
 
     (FLOAT, _) -> do
       dataBytes <- popStream
-      floats <- liftEither (decodeFloat32 dataBytes)
+      floats    <- liftEither (decodeFloat32 dataBytes)
       return $ Float floats
 
     (DOUBLE, _) -> do
@@ -414,13 +414,9 @@ decodeColumnPart typs = do
         liftEither $
           decodeBytes tagBytes
 
-      nestedColumn $ do
-        decodedFields <-
-          fmap Boxed.fromList $
-            for fields decodeColumn
-
-        pure $
-          Union tags decodedFields
+      nestedColumn $
+        Union tags . Boxed.fromList
+          <$> for fields decodeColumn
 
     (LIST typ, enc) -> do
       lengthBytes <-
@@ -429,12 +425,9 @@ decodeColumnPart typs = do
       lengths <-
         liftEither (decodeIntegerRLEversion enc lengthBytes)
 
-      nestedColumn $ do
-        internal <-
-          decodeColumn typ
-
-        pure $
-          List lengths internal
+      nestedColumn $
+        List lengths
+          <$> decodeColumn typ
 
     (MAP keyTyp valTyp, enc) -> do
       lengthBytes <-
@@ -443,15 +436,11 @@ decodeColumnPart typs = do
       lengths <-
         liftEither (decodeIntegerRLEversion enc lengthBytes)
 
-      nestedColumn $ do
-        keys <-
-          decodeColumn keyTyp
+      nestedColumn $
+        Map lengths
+          <$> decodeColumn keyTyp
+          <*> decodeColumn valTyp
 
-        values <-
-          decodeColumn valTyp
-
-        pure $
-          Map lengths keys values
 
 decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
 decodeString = \case

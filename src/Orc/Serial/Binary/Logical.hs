@@ -54,4 +54,4 @@ printOrcFile fp = do
   withOrcStream fp $
     ByteStream.stdout
       . ByteStream.concat
-      . Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppJsonRow x) $> r)
+      . Streaming.maps (\(x :> r) -> ppJsonRow x $> r)
