@@ -66,6 +66,7 @@ dayToDate (Day g) =
   in
     Date (y + (mi + 2)`div`12) mm dd
 
+
 timestampToDateTime :: Timestamp -> DateTime
 timestampToDateTime (Timestamp ts tn) =
   let

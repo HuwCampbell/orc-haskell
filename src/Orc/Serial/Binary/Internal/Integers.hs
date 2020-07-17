@@ -8,7 +8,7 @@
 {-# LANGUAGE FlexibleContexts         #-}
 {-# LANGUAGE TypeApplications         #-}
 
-module Orc.Serial.Encodings.Integers (
+module Orc.Serial.Binary.Internal.Integers (
     decodeFloat32
   , decodeFloat64
 
@@ -51,8 +51,8 @@ import qualified Data.Vector.Storable.Mutable as Mutable
 import           Foreign (mallocForeignPtrArray, withForeignPtr, plusPtr)
 import           Foreign.Ptr (Ptr)
 
-import qualified Orc.Serial.Encodings.Get as Get
-import           Orc.Serial.Encodings.OrcNum
+import qualified Orc.Serial.Binary.Internal.Get as Get
+import           Orc.Serial.Binary.Internal.OrcNum
 
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)

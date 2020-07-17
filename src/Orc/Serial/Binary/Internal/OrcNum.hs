@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE FlexibleContexts       #-}
-module Orc.Serial.Encodings.OrcNum (
+module Orc.Serial.Binary.Internal.OrcNum (
     OrcNum (..)
 
   , zigZag64

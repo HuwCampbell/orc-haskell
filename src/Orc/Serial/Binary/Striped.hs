@@ -4,13 +4,11 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 
-module Orc.Serial.Seek (
+module Orc.Serial.Binary.Striped (
     withOrcFile
   , withOrcStripes
-  , withOrcStream
   , checkOrcFile
 
-  , printOrcFile
   , withFileLifted
 ) where
 
@@ -43,10 +41,10 @@ import           Orc.Data.Data (StructField (..), Indexed, currentIndex, current
 import           Orc.Schema.Types as Orc
 
 import           Orc.Serial.Protobuf.Schema as Orc
-import           Orc.Serial.Encodings.Bytes
-import           Orc.Serial.Encodings.Compression
-import           Orc.Serial.Encodings.Integers
-import           Orc.Serial.Encodings.OrcNum
+import           Orc.Serial.Binary.Internal.Bytes
+import           Orc.Serial.Binary.Internal.Compression
+import           Orc.Serial.Binary.Internal.Integers
+import           Orc.Serial.Binary.Internal.OrcNum
 import           Orc.Serial.Json.Logical (ppJsonRow)
 
 import           Orc.Table.Striped (Column (..))
@@ -112,32 +110,6 @@ withOrcStripes file action =
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)
 
-
--- | Stream the values as a logical rows.
---
---   This is the most useful way to read an ORC file,
---   but entails a pivot of all the values. If speed is
---   key, one may wish to use  withOrcStripes and do a
---   predicate pushdown first.
-withOrcStream
-  :: MonadIO m
-  => FilePath
-  -> ((Streaming.Stream (Of Logical.Row) (EitherT String m) ()) -> EitherT String IO r)
-  -> EitherT String IO r
-withOrcStream fs action =
-  withOrcStripes fs $
-    action . streamLogical
-
--- | Simple pretty printer of ORC to JSON.
---
--- Serves a a demonstration of how to grab an ORC file and
--- do something useful with it.
-printOrcFile :: FilePath -> EitherT String IO ()
-printOrcFile fp = do
-  withOrcStream fp $
-    ByteStream.stdout
-      . ByteStream.concat
-      . Streaming.maps (\(x :> r) -> ByteStream.fromLazy (ppJsonRow x) $> r)
 
 
 -- | Checks that the magic values are present in the file

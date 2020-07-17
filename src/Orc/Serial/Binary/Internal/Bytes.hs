@@ -4,7 +4,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE PatternGuards #-}
 
-module Orc.Serial.Encodings.Bytes (
+module Orc.Serial.Binary.Internal.Bytes (
     decodeBytes
   , decodeBits
 

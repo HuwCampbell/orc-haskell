@@ -13,7 +13,7 @@ import qualified Hedgehog.Range as Range
 import           Orc.Prelude
 import           Prelude (maxBound)
 
-import           Orc.Serial.Encodings.Bytes
+import           Orc.Serial.Binary.Internal.Bytes
 
 
 prop_roundTripBytes :: Property

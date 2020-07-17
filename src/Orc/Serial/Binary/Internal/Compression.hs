@@ -4,7 +4,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 
-module Orc.Serial.Encodings.Compression (
+module Orc.Serial.Binary.Internal.Compression (
     readCompressedStream
 ) where
 
@@ -18,7 +18,7 @@ import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Lazy as Lazy
 
 import           Orc.Schema.Types as Orc
-import qualified Orc.Serial.Encodings.Get as Get
+import qualified Orc.Serial.Binary.Internal.Get as Get
 
 import           System.IO.Unsafe as Unsafe
 

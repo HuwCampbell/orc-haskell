@@ -200,12 +200,10 @@ data UserMetadataItem = UserMetadataItem {
   } deriving (Eq, Ord, Show, Generic)
 
 
-
 data RowIndexEntry = RowIndexEntry {
     positions :: [Word64]
   , rowIndexStatistics :: Maybe ColumnStatistics
   } deriving (Eq, Ord, Show)
-
 
 
 newtype RowIndex = RowIndex {

@@ -3,7 +3,7 @@ module Main (
 ) where
 
 import Data.Text (pack)
-import Orc.Serial.Seek
+import Orc.Serial.Binary.Logical
 import Options.Applicative
 import Control.Monad.Trans.Either.Exit
 

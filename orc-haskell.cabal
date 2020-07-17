@@ -31,13 +31,14 @@ library
 
                        Orc.Schema.Types
 
-                       Orc.Serial.Encodings.Bytes
-                       Orc.Serial.Encodings.Compression
-                       Orc.Serial.Encodings.Get
-                       Orc.Serial.Encodings.Integers
-                       Orc.Serial.Encodings.OrcNum
+                       Orc.Serial.Binary.Logical
+                       Orc.Serial.Binary.Striped
 
-                       Orc.Serial.Seek
+                       Orc.Serial.Binary.Internal.Bytes
+                       Orc.Serial.Binary.Internal.Compression
+                       Orc.Serial.Binary.Internal.Get
+                       Orc.Serial.Binary.Internal.Integers
+                       Orc.Serial.Binary.Internal.OrcNum
 
                        Orc.Serial.Json.Logical
 

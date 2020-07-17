@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 
-module Orc.Serial.Encodings.Get (
+module Orc.Serial.Binary.Internal.Get (
     getWord24le
   , getOrcNumBe
   , getOrcNumBePatchedBase
@@ -16,7 +16,7 @@ import           Data.Word (Word8, Word32)
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get
 
-import           Orc.Serial.Encodings.OrcNum
+import           Orc.Serial.Binary.Internal.OrcNum
 
 import           Orc.Prelude
 

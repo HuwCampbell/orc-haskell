@@ -68,6 +68,7 @@ concat xs = case xs of
   _ ->
     Left "Can't concatenated an empty list of columns."
 
+
 append :: Column -> Column -> Either String Column
 append c0 c1 =
   case (c0, c1) of

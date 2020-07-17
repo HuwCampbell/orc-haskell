@@ -17,7 +17,7 @@ import qualified Hedgehog.Range as Range
 import           Orc.Prelude
 import           Prelude (minBound, maxBound)
 
-import           Orc.Serial.Encodings.Integers
+import           Orc.Serial.Binary.Internal.Integers
 
 
 prop_roundTripBase128Varint :: Property
