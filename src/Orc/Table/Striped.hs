@@ -8,7 +8,7 @@ module Orc.Table.Striped (
   , concat
 ) where
 
-import           Orc.Prelude hiding (concat)
+import           Orc.Prelude
 
 import           Control.Monad (foldM)
 
@@ -18,8 +18,6 @@ import           Data.Word (Word8, Word32)
 import           Data.WideWord (Int128)
 
 import           Orc.Data.Data
-
-import           Data.List.NonEmpty (NonEmpty)
 
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable

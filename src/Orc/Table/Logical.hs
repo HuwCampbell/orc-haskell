@@ -22,6 +22,7 @@ module Orc.Table.Logical (
   , takeList
   , takeMap
   , takePartials
+  , takeDecimal
 ) where
 
 import           Orc.Prelude

@@ -24,20 +24,11 @@ module Orc.Schema.Types (
 
 import           Data.Int
 import           Data.ByteString (ByteString)
-import           Data.Foldable (foldl')
-import           Data.ProtocolBuffers
 import           Data.Text (Text)
 import           Data.Word
 import           GHC.Generics (Generic)
-import           Data.Traversable (for)
 
-import           Control.Monad.Trans.State (state, runState)
-
-import qualified Data.Serialize.Get as Get
-import qualified Data.Serialize.Put as Put
-
-import           Orc.Data.Data (StructField (..), StructFieldName (..))
-
+import           Orc.Data.Data (StructField (..))
 
 data CompressionKind
   = NONE

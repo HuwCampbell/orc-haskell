@@ -267,7 +267,6 @@ import qualified Debug.Trace as Trace
 
 import           GHC.Real as Real (
            fromIntegral
-         , fromRational
          )
 #if MIN_VERSION_base(4,9,0)
 import           GHC.Stack (HasCallStack)

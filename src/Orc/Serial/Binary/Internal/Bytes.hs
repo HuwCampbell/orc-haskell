@@ -21,7 +21,7 @@ module Orc.Serial.Binary.Internal.Bytes (
 import           Data.Bits (testBit, setBit)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
-import           Data.Word (Word8, Word64)
+import           Data.Word (Word8)
 
 import           Data.Serialize.Get (Get)
 import qualified Data.Serialize.Get as Get

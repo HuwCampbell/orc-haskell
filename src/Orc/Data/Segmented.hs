@@ -14,7 +14,6 @@ import qualified Data.ByteString as B
 import           Data.ByteString.Internal (ByteString(..))
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
-import           Data.Word (Word64)
 
 import           Orc.Prelude
 

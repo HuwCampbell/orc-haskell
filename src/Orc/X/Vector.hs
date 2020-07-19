@@ -98,9 +98,9 @@ streamingLength =
     case bs of
       ByteStream.Empty r ->
         ByteStream.Empty (n :> r)
-      ByteStream.Chunk s rem ->
+      ByteStream.Chunk s rest ->
         ByteStream.Chunk s $
-          go (n + fromIntegral (ByteString.length s)) rem
+          go (n + fromIntegral (ByteString.length s)) rest
       ByteStream.Go act ->
         ByteStream.Go $
           fmap (go n) act

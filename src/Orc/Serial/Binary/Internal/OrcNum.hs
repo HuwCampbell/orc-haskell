@@ -12,7 +12,7 @@ module Orc.Serial.Binary.Internal.OrcNum (
 ) where
 
 import           Data.Bits (Bits, shiftL, shiftR, xor, (.&.))
-import           Data.Word (Word8, Word16, Word32, Word64)
+import           Data.Word (Word8, Word16, Word32)
 import           Data.WideWord (Int128, Word128)
 
 import           Foreign (Storable (..))

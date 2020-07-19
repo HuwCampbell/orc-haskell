@@ -20,8 +20,8 @@ import           Control.Monad.Except (MonadError, liftEither, throwError)
 import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, modify')
 import           Control.Monad.Reader (ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
+import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
-import           Control.Monad.Morph
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
@@ -572,7 +572,7 @@ putOrcStream column = do
           (fromIntegral footerLen)
           (Just NONE)
           Nothing
-          [1]
+          [0,12]
           Nothing
           (Just "ORC")
 
@@ -605,7 +605,7 @@ putStripe (start, sis, _) column = do
         (Just lenF)
         Nothing
 
-  return (lenD + lenF, si : sis, typ)
+  return (start + lenD + lenF, si : sis, typ)
 
 
 incColumn :: Monad m => StateT StripeState m ()
@@ -625,21 +625,21 @@ nestedEncode act =
   lift incColumn *> act <* lift decColumn
 
 
-record :: (MonadTrans t, Monad m) => (Word32 -> Orc.Stream) -> t (StateT StripeState m) ()
+record :: Monad m => (Word32 -> Orc.Stream) -> ByteStream (StateT StripeState m) ()
 record stream =
   lift $
     modify' $ \(ix, enc, streams_) ->
       (ix, enc, stream ix : streams_)
 
 
-fullEncoding :: (MonadTrans t, Monad m) => Orc.ColumnEncoding -> t (StateT StripeState m) ()
+fullEncoding :: Monad m => Orc.ColumnEncoding -> ByteStream (StateT StripeState m) ()
 fullEncoding colEnc =
   lift $
     modify' $ \(ix, enc, streams_) ->
       (ix, colEnc : enc, streams_)
 
 
-simpleEncoding :: (MonadTrans t, Monad m) => Orc.ColumnEncodingKind -> t (StateT StripeState m) ()
+simpleEncoding :: Monad m => Orc.ColumnEncodingKind -> ByteStream (StateT StripeState m) ()
 simpleEncoding colEncKind =
   fullEncoding (Orc.ColumnEncoding colEncKind Nothing)
 

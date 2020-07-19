@@ -14,8 +14,6 @@ module Orc.Data.Data (
   , prevIndex
   ) where
 
-import           Control.Monad.Except
-
 import           Data.Word (Word32)
 import qualified Data.Vector as Boxed
 import           Orc.Prelude

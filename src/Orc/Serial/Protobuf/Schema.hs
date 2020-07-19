@@ -30,13 +30,9 @@ module Orc.Serial.Protobuf.Schema (
   , toProtoPostScript
   ) where
 
-import           Data.Int
 import           Data.ByteString (ByteString)
 import           Data.Foldable (foldl')
 import           Data.ProtocolBuffers
-import           Data.Text (Text)
-import           Data.Word
-import           GHC.Generics (Generic)
 import           Data.Traversable (for)
 
 import           Control.Monad.Trans.State (state, runState)

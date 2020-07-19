@@ -27,7 +27,6 @@ import qualified Data.ByteString as ByteString
 import           Data.Char (ord)
 import           Data.Word (Word8)
 import qualified Data.List as List
-import qualified Data.ByteString.Lazy as Lazy
 import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Builder.Prim as Prim
