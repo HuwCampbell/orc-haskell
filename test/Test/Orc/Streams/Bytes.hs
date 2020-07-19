@@ -29,6 +29,22 @@ prop_roundTripBytes =
 
 
 
+prop_roundTripBoolBits :: Property
+prop_roundTripBoolBits =
+  withTests 1000 . property $ do
+    x <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.bool)
+
+    tripping
+      (Storable.fromList x)
+      encodeBits
+      (fmap (Storable.take (length x)) . decodeBits)
+
+
+
 tests :: IO Bool
 tests =
   checkParallel $$(discover)

@@ -9,13 +9,16 @@ module Orc.Serial.Binary.Internal.Bytes (
   , decodeBits
 
   , encodeBytes
+  , encodeBits
+
   , putBytes
+  , putBits
 
   -- For Benchmarking
   , decodeBytesNative
 ) where
 
-import           Data.Bits (testBit)
+import           Data.Bits (testBit, setBit)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
 import           Data.Word (Word8, Word64)
@@ -151,7 +154,7 @@ putBytes =
 
             in do Put.putInt8 header
                   for_ noRuns $ \(ww,i) ->
-                    for_ [1..i] $ \_ ->
+                    for_ (enumFromTo 1 i) $ \_ ->
                       Put.putWord8 ww
 
                   place runStart
@@ -163,7 +166,7 @@ putBytes =
 
 
 
-{-# INLINE decodeBits #-}
+{-# INLINABLE decodeBits #-}
 decodeBits :: ByteString -> Either String (Storable.Vector Bool)
 decodeBits =
   let
@@ -180,3 +183,34 @@ decodeBits =
 
     pure $
       allBytesWorth
+
+
+{-# INLINABLE putBits #-}
+putBits :: Putter (Storable.Vector Bool)
+putBits =
+    putBytes . Storable.unfoldr go
+  where
+    go bools
+      | Storable.null bools = Nothing
+
+    go bools = do
+      let
+        (b1, rest) =
+          Storable.splitAt 8 bools
+
+        toWrite =
+          Storable.ifoldl' sets 0 b1
+
+      Just(toWrite, rest)
+
+    sets acc i b =
+      if b then
+        setBit acc (7 - i)
+      else
+        acc
+
+{-# INLINE encodeBits #-}
+encodeBits :: (Storable.Vector Bool) -> ByteString
+encodeBits =
+    Put.runPut . putBits
+

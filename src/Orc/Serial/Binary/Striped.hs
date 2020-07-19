@@ -19,13 +19,11 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
 import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, modify')
 import           Control.Monad.Reader (ReaderT (..), runReaderT, ask)
-import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
-import qualified Control.Monad.Trans.State.Lazy as Lazy
 import           Control.Monad.Morph
 
-import           Data.Serialize.Put (PutM, Putter)
+import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
 import qualified Data.Serialize.Get as Get
 
@@ -41,6 +39,7 @@ import           Data.Word (Word32)
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
+import qualified Streaming.Internal as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
 import qualified Data.ByteString.Streaming.Internal as ByteStream
 
@@ -53,11 +52,8 @@ import           Orc.Serial.Binary.Internal.Bytes
 import           Orc.Serial.Binary.Internal.Compression
 import           Orc.Serial.Binary.Internal.Integers
 import           Orc.Serial.Binary.Internal.OrcNum
-import           Orc.Serial.Json.Logical (ppJsonRow)
 
 import           Orc.Table.Striped (Column (..))
-import           Orc.Table.Convert (streamLogical)
-import qualified Orc.Table.Logical as Logical
 
 import           Orc.X.Vector
 
@@ -541,39 +537,40 @@ liftMaybe =
 
 
 
-putOrcFile :: (MonadIO (t IO), MonadTransControl t) => FilePath -> Column -> t IO ()
+putOrcFile :: (MonadTransControl t, MonadIO (t IO)) => FilePath -> Streaming.Stream (Of Column) (t IO) () -> t IO ()
 putOrcFile file column =
   withFileLifted file WriteMode $ \handle -> do
     ByteStream.toHandle handle $
       putOrcStream column
 
 
-putOrcStream :: MonadIO m => Column -> ByteStream m ()
+
+putOrcStream :: MonadIO m => Streaming.Stream (Of Column) m () -> ByteStream m ()
 putOrcStream column = do
   "ORC"
 
-  (len, stripe, t) <-
-    putStripe 3 column
+  (len, stripeInfos, t) :> () <-
+    hyloByteStream putStripe (3,[],BOOLEAN) column
 
-  (footerLen :> ()) <-
-    untied_ $ do
+  footerLen :> () <-
+    stream_ $ do
       putFooter $
         Footer
           (Just 3)
           (Just (len + 3))
-          [stripe]
+          (reverse stripeInfos)
           t
           []
           (Nothing)
           []
           Nothing
 
-  (psLength :> ()) <-
-    untied_ $
+  psLength :> () <-
+    stream_ $
       putPostScript $
         PostScript
           (fromIntegral footerLen)
-          Nothing
+          (Just NONE)
           Nothing
           [1]
           Nothing
@@ -587,8 +584,8 @@ putOrcStream column = do
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 
-putStripe :: MonadIO m => Word64 -> Column -> ByteStream m (Word64, StripeInformation, Type)
-putStripe start column = do
+putStripe :: MonadIO m => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
+putStripe (start, sis, _) column = do
   (lenD :> (typ,(_,e,s))) <-
     streamingLength $
       flip runStateT (0,[],[]) $ do
@@ -596,26 +593,31 @@ putStripe start column = do
           putColumn column
 
   (lenF :> ()) <-
-    untied_ $
+    stream_ $
       putStripeFooter $ StripeFooter (reverse s) (reverse e) Nothing
 
   let
     si =
-      StripeInformation (Just start) (Just 0) (Just lenD) (Just lenF) (Just 3)
+      StripeInformation
+        (Just start)
+        (Just 0)
+        (Just lenD)
+        (Just lenF)
+        Nothing
 
-  return (lenD + lenF, si, typ)
+  return (lenD + lenF, si : sis, typ)
 
 
 incColumn :: Monad m => StateT StripeState m ()
 incColumn =
-  modify' $ \(ix, enc, streams) ->
-    (ix + 1, enc, streams)
+  modify' $ \(ix, enc, streams_) ->
+    (ix + 1, enc, streams_)
 
 
 decColumn :: Monad m => StateT StripeState m ()
 decColumn =
-  modify' $ \(ix, enc, streams) ->
-    (ix + 1, enc, streams)
+  modify' $ \(ix, enc, streams_) ->
+    (ix - 1, enc, streams_)
 
 
 nestedEncode :: Monad m => ByteStream (StateT StripeState m) r -> ByteStream (StateT StripeState m) r
@@ -623,21 +625,23 @@ nestedEncode act =
   lift incColumn *> act <* lift decColumn
 
 
-record :: Monad m => (Word32 -> Orc.Stream) -> StateT StripeState m ()
+record :: (MonadTrans t, Monad m) => (Word32 -> Orc.Stream) -> t (StateT StripeState m) ()
 record stream =
-  modify' $ \(ix, enc, streams) ->
-    (ix, enc, stream ix : streams)
+  lift $
+    modify' $ \(ix, enc, streams_) ->
+      (ix, enc, stream ix : streams_)
 
 
-encoding :: Monad m => Orc.ColumnEncoding -> StateT StripeState m ()
-encoding colEnc =
-  modify' $ \(ix, enc, streams) ->
-    (ix, colEnc : enc, streams)
+fullEncoding :: (MonadTrans t, Monad m) => Orc.ColumnEncoding -> t (StateT StripeState m) ()
+fullEncoding colEnc =
+  lift $
+    modify' $ \(ix, enc, streams_) ->
+      (ix, colEnc : enc, streams_)
 
 
-simpleEncoding :: Monad m => Orc.ColumnEncodingKind -> StateT StripeState m ()
+simpleEncoding :: (MonadTrans t, Monad m) => Orc.ColumnEncodingKind -> t (StateT StripeState m) ()
 simpleEncoding colEncKind =
-  encoding (Orc.ColumnEncoding colEncKind Nothing)
+  fullEncoding (Orc.ColumnEncoding colEncKind Nothing)
 
 
 putColumn :: MonadIO m => Column -> ByteStream (StateT StripeState m) Type
@@ -647,41 +651,47 @@ putColumn col =
 
 putColumnPart :: MonadIO m => Column -> ByteStream (StateT StripeState m) Type
 putColumnPart = \case
+  Bool bits   -> do
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putBits bits
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    return BOOLEAN
+
 
   Bytes bytes -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putBytes bytes
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putBytes bytes
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return BYTE
 
   Short shorts -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putIntegerRLEv1 shorts
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putIntegerRLEv1 shorts
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return SHORT
 
   Integer ints -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putIntegerRLEv1 ints
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putIntegerRLEv1 ints
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return INT
 
   Long longs -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putIntegerRLEv1 longs
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putIntegerRLEv1 longs
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return LONG
 
   Float floats -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putFloat32 floats
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putFloat32 floats
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return FLOAT
 
   Double doubles -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putFloat64 doubles
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putFloat64 doubles
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return DOUBLE
 
   String strs -> do
@@ -696,15 +706,37 @@ putColumnPart = \case
     putStringColumn strs
     return VARCHAR
 
+  Binary strs -> do
+    putStringColumn strs
+    return BINARY
+
+  Decimal words scale -> do
+    _          <- simpleEncoding DIRECT
+    (l0 :> _)  <- stream_ $ Storable.mapM putBase128Varint words
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
+    (l1 :> _)  <- stream_ $ putIntegerRLEv1 scale
+    _          <- record (\ix -> Stream (Just SK_SECONDARY) (Just ix) (Just l1))
+    return DECIMAL
+
+
+  Timestamp seconds nanos -> do
+    _          <- simpleEncoding DIRECT
+    (l0 :> _)  <- stream_ $ putIntegerRLEv1 seconds
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
+    (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.map lazyNano nanos)
+    _          <- record (\ix -> Stream (Just SK_SECONDARY) (Just ix) (Just l1))
+    return DECIMAL
+
+
   Date dates -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putIntegerRLEv1 dates
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putIntegerRLEv1 dates
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     return DATE
 
 
   Struct fields -> do
-    _          <- lift    $ simpleEncoding DIRECT
+    _          <- simpleEncoding DIRECT
     nestedType <-
       nestedEncode $
         traverse (traverse putColumn) fields
@@ -713,10 +745,9 @@ putColumnPart = \case
 
 
   List lengths nested -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putIntegerRLEv1 lengths
-    _          <- lift    $ record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l))
-
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putIntegerRLEv1 lengths
+    _          <- record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l))
     nestedType <-
       nestedEncode $
         putColumn nested
@@ -725,23 +756,21 @@ putColumnPart = \case
 
 
   Map lengths keys values -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putIntegerRLEv1 lengths
-    _          <- lift    $ record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l))
-
-    (keyTyp, valTyp) <-
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putIntegerRLEv1 lengths
+    _          <- record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l))
+    (kT, vT)   <-
       nestedEncode $
         (,) <$> putColumn keys
             <*> putColumn values
 
-    return $ MAP keyTyp valTyp
+    return $ MAP kT vT
 
 
   Union tags inners -> do
-    _          <- lift    $ simpleEncoding DIRECT
-    (l :> _)   <- untied_ $ putBytes tags
-    _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
-
+    _          <- simpleEncoding DIRECT
+    (l :> _)   <- stream_ $ putBytes tags
+    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
     innerTypes <-
       nestedEncode $
         for inners putColumn
@@ -749,26 +778,52 @@ putColumnPart = \case
     return $ UNION (toList innerTypes)
 
 
+  Partial presence inner -> do
+    (l :> _)   <- stream_ $ putBits presence
+    _          <- record (\ix -> Stream (Just SK_PRESENT) (Just ix) (Just l))
+    putColumnPart inner
+
+
 putStringColumn :: MonadIO m => Boxed.Vector ByteString -> ByteStream (StateT StripeState m) ()
 putStringColumn strs = do
-  _          <- lift    $ simpleEncoding DIRECT
-  (l0 :> _)  <- untied_ $ for strs Put.putByteString
-  _          <- lift    $ record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
+  _          <- simpleEncoding DIRECT
+  (l0 :> _)  <- stream_ $ for strs Put.putByteString
+  _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
 
-  (l1 :> _)  <- untied_ $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) strs)
-  _          <- lift    $ record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l1))
+  (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) strs)
+  _          <- record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l1))
   return ()
 
 
-untied_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
-untied_ = streamingLength . untied
+stream_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
+stream_ = streamingLength . untied
+{-# INLINE stream_ #-}
 
 
 untied :: MonadIO m => PutM a -> ByteStream m a
 untied x =
   let (a, bldr) = Put.runPutMBuilder x
   in  ByteStream.toStreamingByteString bldr $> a
+{-# INLINE untied #-}
 
 
 i2w32 :: Int -> Word32
 i2w32 = fromIntegral
+{-# INLINE i2w32 #-}
+
+
+hyloByteStream :: Monad m => (x -> a -> ByteStream m x) -> x -> Streaming.Stream (Of a) m r -> ByteStream m (Of x r)
+hyloByteStream step begin =
+    loop begin
+  where
+    loop x = \case
+      Streaming.Return r ->
+        ByteStream.Empty (x :> r)
+
+      Streaming.Effect m ->
+        ByteStream.mwrap $
+          loop x <$> m
+
+      Streaming.Step (a :> rest) -> do
+        x' <- step x a
+        loop x' rest

@@ -3,14 +3,26 @@ module Main (
 ) where
 
 import Data.Text (pack)
+import Orc.Serial.Binary.Striped
 import Orc.Serial.Binary.Logical
 import Options.Applicative
 import Control.Monad.Trans.Either.Exit
 
-parser :: Parser (FilePath, Bool)
-parser = (,) <$> strArgument (metavar "ORC_FILE") <*> switch (long "schema")
+import qualified Streaming.Prelude as Streaming
+
+parser :: Parser (FilePath, Maybe FilePath)
+parser = (,) <$> strArgument (metavar "ORC_FILE") <*> optional (strArgument (metavar "OUT_ORC_FILE"))
 
 main :: IO ()
 main = do
-  (fp, _) <- execParser (info (parser <**> helper) idm)
-  orDie pack (printOrcFile fp)
+  (fp, oFop) <- execParser (info (parser <**> helper) idm)
+
+  orDie pack $
+    case oFop of
+      Nothing ->
+        printOrcFile fp
+
+      Just fop ->
+        withOrcStripes fp $
+          putOrcFile fop . Streaming.map snd
+

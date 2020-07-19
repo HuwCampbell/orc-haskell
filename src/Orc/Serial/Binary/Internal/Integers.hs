@@ -29,6 +29,7 @@ module Orc.Serial.Binary.Internal.Integers (
 
   , powerOfTen
   , parseNano
+  , lazyNano
 ) where
 
 import           Control.Arrow ((&&&))
@@ -46,7 +47,7 @@ import qualified Data.Serialize.IEEE754 as IEEE754
 import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
-import           Data.Word (Word8, Word64)
+import           Data.Word (Word8)
 import           Data.String (String)
 
 import qualified Data.Vector.Storable as Storable
@@ -245,7 +246,7 @@ putIntegerRLEv1 =
             in do Put.putInt8 header
                   for_ noRuns $
                     \(v,i) ->
-                      for_ [1.. i] $
+                      for_ (enumFromTo 1 i) $
                         const (putBase128Varint v)
 
                   place runStart
@@ -543,3 +544,10 @@ parseNano nano =
     else
       result * (10 ^ (zeros + 1))
 {-# INLINE parseNano #-}
+
+
+lazyNano :: Word64 -> Word64
+lazyNano nano =
+  nano `shiftL` 3
+
+
