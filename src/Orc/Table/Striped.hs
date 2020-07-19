@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase        #-}
 
 module Orc.Table.Striped (
     Column (..)
@@ -59,6 +60,7 @@ data Column
   -- For Nullable columns.
   | Partial   !(Storable.Vector Bool) !Column
   deriving (Eq, Show)
+
 
 
 concat :: [Column] -> Either String Column

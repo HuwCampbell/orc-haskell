@@ -11,6 +11,9 @@
 module Orc.Serial.Binary.Internal.Integers (
     decodeFloat32
   , decodeFloat64
+  , putFloat32
+  , putFloat64
+
 
   , decodeIntegerRLEv1
   , decodeBase128Varint
@@ -38,7 +41,8 @@ import qualified Data.Serialize.Get as Get
 import           Data.Serialize.Put (Putter)
 import qualified Data.Serialize.Put as Put
 
-import qualified Data.Serialize.IEEE754 as Get
+import qualified Data.Serialize.IEEE754 as IEEE754
+
 import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
@@ -81,13 +85,23 @@ decodeBase128Varint bytes =
 {-# INLINE decodeFloat32 #-}
 decodeFloat32 :: ByteString ->  Either String (Storable.Vector Float)
 decodeFloat32 bytes =
-  Get.runGet (manyStorable Get.getFloat32le) bytes
+  Get.runGet (manyStorable IEEE754.getFloat32le) bytes
 
 
 {-# INLINE decodeFloat64 #-}
 decodeFloat64 :: ByteString ->  Either String (Storable.Vector Double)
 decodeFloat64 bytes =
-  Get.runGet (manyStorable Get.getFloat64le) bytes
+  Get.runGet (manyStorable IEEE754.getFloat64le) bytes
+
+
+putFloat32 :: Putter (Storable.Vector Float)
+putFloat32 vecs =
+  Storable.forM_ vecs IEEE754.putFloat32le
+
+
+putFloat64 :: Putter (Storable.Vector Double)
+putFloat64 vecs =
+  Storable.forM_ vecs IEEE754.putFloat64le
 
 
 {-# INLINE getBase128Varint #-}

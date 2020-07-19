@@ -9,6 +9,7 @@ module Orc.Serial.Binary.Internal.Bytes (
   , decodeBits
 
   , encodeBytes
+  , putBytes
 
   -- For Benchmarking
   , decodeBytesNative

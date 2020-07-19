@@ -60,6 +60,7 @@ library
                      , Decimal
                      , exceptions                      >= 0.10
                      , mtl
+                     , mmorph
                      , monad-control                   == 1.0.*
                      , protobuf                        >= 0.2        && < 0.3
                      , pretty-show
