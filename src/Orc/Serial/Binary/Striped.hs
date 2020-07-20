@@ -230,14 +230,14 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     hSeek handle AbsoluteSeek dataBytesStart
 
   column <-
-    decodeColumnTop typeInfo mCompressionInfo columnsEncodings nonRowIndexStreams $
+    decodeTable typeInfo mCompressionInfo columnsEncodings nonRowIndexStreams $
       ByteStream.hGet handle $ fromIntegral rdLength
 
   return (stripeInfo, column)
 
 
-decodeColumnTop :: MonadIO m => Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteStream m () -> EitherT String m Column
-decodeColumnTop typs mCompression encodings orcStreams dataBytes =
+decodeTable :: MonadIO m => Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteStream m () -> EitherT String m Column
+decodeTable typs mCompression encodings orcStreams dataBytes =
   evalStateT (runReaderT (decodeColumn typs) mCompression) (makeIndexed encodings, orcStreams, dataBytes)
 
 
@@ -552,7 +552,7 @@ putOrcStream column = do
   "ORC"
 
   (len, stripeInfos, t) :> () <-
-    hyloByteStream putStripe (3,[],BOOLEAN) column
+    hyloByteStream putTable (3,[],BOOLEAN) column
 
   footerLen :> () <-
     stream_ $ do
@@ -586,8 +586,8 @@ putOrcStream column = do
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 
-putStripe :: (MonadError String m, MonadIO m) => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
-putStripe (start, sis, _) column = do
+putTable :: (MonadError String m, MonadIO m) => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
+putTable (start, sis, _) column = do
   numRows <- lift $ liftEither $ Striped.length column
 
   (lenD :> (typ,(_,e,s))) <-
