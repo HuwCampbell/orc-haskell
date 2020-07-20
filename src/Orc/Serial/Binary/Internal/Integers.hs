@@ -49,6 +49,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
 import           Data.Word (Word8)
 import           Data.String (String)
+import qualified Data.List as List
 
 import qualified Data.Vector.Storable as Storable
 import qualified Data.Vector.Storable.Mutable as Mutable
@@ -186,7 +187,6 @@ getIntegerRLEv1 =
       many getSet
 
 
-
 putIntegerRLEv1 :: forall w . OrcNum w => Putter (Storable.Vector w)
 putIntegerRLEv1 =
   let
@@ -203,16 +203,16 @@ putIntegerRLEv1 =
         Storable.foldr collect []
 
 
-    takeLiterals :: [(w, Word8)] -> ([(w, Word8)], [(w, Word8)])
+    takeLiterals :: [(w, Word8)] -> ([w], [(w, Word8)])
     takeLiterals =
       let
-        go :: Word8 -> [(w, Word8)] -> ([(w, Word8)], [(w, Word8)])
+        go :: Word8 -> [(w, Word8)] -> ([w], [(w, Word8)])
         go n rest
           | (x, i) : xs <- rest
           , i < 3
           , n + i < 128
           = let (r, rs) = go (n + i) xs
-            in  ((x,i):r, rs)
+            in  (List.replicate (fromIntegral i) x <> r, rs)
           | otherwise
           = ([], rest)
 
@@ -238,16 +238,14 @@ putIntegerRLEv1 =
                 takeLiterals ws
 
               totalLen =
-                sum $ snd <$> noRuns
+                length noRuns
 
               header =
                 negate . fromIntegral $ totalLen
 
             in do Put.putInt8 header
                   for_ noRuns $
-                    \(v,i) ->
-                      for_ (enumFromTo 1 i) $
-                        const (putBase128Varint v)
+                    putBase128Varint
 
                   place runStart
 
@@ -278,11 +276,11 @@ getIntegerRLEv2 =
     consumeSome a =
       (:) <$> a <*> consumeMany a
 
-    getLabelledSet :: Get (Storable.Vector w)
-    getLabelledSet = do
-      readSoFar <- Get.bytesRead
-      remaining <- Get.remaining
-      Get.label ("Read so far: " <> show readSoFar <> "; Remaining: " <> show remaining) getSet
+    -- getLabelledSet :: Get (Storable.Vector w)
+    -- getLabelledSet = do
+    --   readSoFar <- Get.bytesRead
+    --   remaining <- Get.remaining
+    --   Get.label ("Read so far: " <> show readSoFar <> "; Remaining: " <> show remaining) getSet
 
     getSet :: Get (Storable.Vector w)
     getSet = do
@@ -309,7 +307,7 @@ getIntegerRLEv2 =
 
   in
     Storable.concat <$>
-      consumeMany getLabelledSet
+      consumeMany getSet
 
 
 -- {-# INLINE getShortRepeat #-}
