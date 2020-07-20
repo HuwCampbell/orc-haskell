@@ -545,7 +545,21 @@ parseNano nano =
 
 
 lazyNano :: Word64 -> Word64
+lazyNano 0 = 0
 lazyNano nano =
-  nano `shiftL` 3
+  let
+    (nano_, zeros_) =
+      normalizePositive (nano, 0)
+  in
+    if (zeros_ > 1) then
+      (nano_ `shiftL` 3) .|. (zeros_ - 1)
+    else
+      nano `shiftL` 3
 
 
+normalizePositive :: (Word64, Word64) -> (Word64, Word64)
+normalizePositive (!c, !n) =
+  case divMod c 10 of
+    (c', r)
+      | r  == 0   -> normalizePositive (c', n + 1)
+      | otherwise -> (c, n)

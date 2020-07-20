@@ -159,6 +159,17 @@ prop_spec_delta_IntegerRLEv2 =
     deltaOutput === Right deltaExpected
 
 
+
+prop_spec_delta_nanos :: Property
+prop_spec_delta_nanos =
+  property $ do
+    x <-
+      forAll $
+        Gen.word64 (Range.linearFrom 0 0 1000000000)
+
+    tripping x lazyNano (Just . parseNano)
+
+
 tests :: IO Bool
 tests =
   checkParallel $$(discover)
