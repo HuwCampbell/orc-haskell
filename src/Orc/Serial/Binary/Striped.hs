@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE FlexibleContexts    #-}
 
 module Orc.Serial.Binary.Striped (
     withOrcFile
@@ -54,6 +55,7 @@ import           Orc.Serial.Binary.Internal.Integers
 import           Orc.Serial.Binary.Internal.OrcNum
 
 import           Orc.Table.Striped (Column (..))
+import qualified Orc.Table.Striped as Striped
 
 import           Orc.X.Vector
 
@@ -537,7 +539,7 @@ liftMaybe =
 
 
 
-putOrcFile :: (MonadTransControl t, MonadIO (t IO)) => FilePath -> Streaming.Stream (Of Column) (t IO) () -> t IO ()
+putOrcFile :: (MonadTransControl t, MonadIO (t IO), MonadError String (t IO)) => FilePath -> Streaming.Stream (Of Column) (t IO) () -> t IO ()
 putOrcFile file column =
   withFileLifted file WriteMode $ \handle -> do
     ByteStream.toHandle handle $
@@ -545,7 +547,7 @@ putOrcFile file column =
 
 
 
-putOrcStream :: MonadIO m => Streaming.Stream (Of Column) m () -> ByteStream m ()
+putOrcStream :: (MonadError String m, MonadIO m) => Streaming.Stream (Of Column) m () -> ByteStream m ()
 putOrcStream column = do
   "ORC"
 
@@ -584,8 +586,10 @@ putOrcStream column = do
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 
-putStripe :: MonadIO m => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
+putStripe :: (MonadError String m, MonadIO m) => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
 putStripe (start, sis, _) column = do
+  numRows <- lift $ liftEither $ Striped.length column
+
   (lenD :> (typ,(_,e,s))) <-
     streamingLength $
       flip runStateT (0,[],[]) $ do
@@ -603,7 +607,7 @@ putStripe (start, sis, _) column = do
         (Just 0)
         (Just lenD)
         (Just lenF)
-        Nothing
+        (Just (fromIntegral numRows))
 
   return (start + lenD + lenF, si : sis, typ)
 

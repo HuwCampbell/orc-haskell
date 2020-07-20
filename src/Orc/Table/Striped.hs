@@ -1,14 +1,15 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DoAndIfThenElse   #-}
 
 module Orc.Table.Striped (
     Column (..)
 
   , append
   , concat
+  , length
 ) where
 
-import           Orc.Prelude
 
 import           Control.Monad (foldM)
 
@@ -21,6 +22,9 @@ import           Orc.Data.Data
 
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
+
+import           Orc.Prelude hiding (length)
+import           Orc.X.Vector
 
 data Column
   -- Composite Columns
@@ -59,6 +63,69 @@ data Column
   | Partial   !(Storable.Vector Bool) !Column
   deriving (Eq, Show)
 
+
+length :: Column -> Either String Int
+length = \case
+  Struct cols ->
+    case safeHead cols of
+      Just col ->
+        length (fieldValue col)
+      Nothing  ->
+        Left "Can't determine length of Struct with no columns"
+
+  Union t _ ->
+    Right $ Storable.length t
+
+  List ls _ ->
+    Right $ Storable.length ls
+
+  Map ls _ _ -> do
+    Right $ Storable.length ls
+
+  Bool x ->
+    Right $ Storable.length x
+
+  Bytes x ->
+    Right $ Storable.length x
+
+  Short x ->
+    Right $ Storable.length x
+
+  Integer x ->
+    Right $ Storable.length x
+
+  Long x ->
+    Right $ Storable.length x
+
+  Decimal x _ ->
+    Right $ Storable.length x
+
+  Date x ->
+    Right $ Storable.length x
+
+  Timestamp x _ ->
+    Right $ Storable.length x
+
+  Float x ->
+    Right $ Storable.length x
+
+  Double x ->
+    Right $ Storable.length x
+
+  String x ->
+    Right $ Boxed.length x
+
+  Char x ->
+    Right $ Boxed.length x
+
+  VarChar x ->
+    Right $ Boxed.length x
+
+  Binary x ->
+    Right $ Boxed.length x
+
+  Partial x _ ->
+    Right $ Storable.length x
 
 
 concat :: [Column] -> Either String Column
