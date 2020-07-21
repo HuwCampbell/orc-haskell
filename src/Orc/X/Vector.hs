@@ -16,19 +16,12 @@ module Orc.X.Vector (
 
 import           Orc.Prelude
 
-import           Streaming (Of (..))
-import qualified Data.ByteString as ByteString
-import qualified Data.ByteString.Streaming as ByteStream
-import qualified Data.ByteString.Streaming.Internal as ByteStream
-
 import           Data.Vector.Generic (Vector, Mutable)
 import qualified Data.Vector.Generic as Vector
 import qualified Data.Vector.Generic.Mutable as MVector
 import           Data.Vector.Generic.Mutable (MVector)
 
 import           Control.Monad.ST
-
-type ByteStream = ByteStream.ByteString
 
 safeHead :: Vector v a => v a -> Maybe a
 safeHead v =
@@ -86,20 +79,3 @@ ximapM f xs = {-# SCC ximapM #-}
 
     loop 0
 {-# INLINE ximapM #-}
-
-
-streamingLength :: Monad m => ByteStream m a -> ByteStream m (Of Word64 a)
-streamingLength =
-  go 0
-    where
-  go !n bs =
-    case bs of
-      ByteStream.Empty r ->
-        ByteStream.Empty (n :> r)
-      ByteStream.Chunk s rest ->
-        ByteStream.Chunk s $
-          go (n + fromIntegral (ByteString.length s)) rest
-      ByteStream.Go act ->
-        ByteStream.Go $
-          fmap (go n) act
-{-# INLINE streamingLength #-}

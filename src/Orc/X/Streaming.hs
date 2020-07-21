@@ -10,15 +10,12 @@ module Orc.X.Streaming (
     streamingLength
   , hyloByteStream
   , streamingPut
-  , rechunk
+  -- , rechunk
 ) where
 
 import           Orc.Prelude
 
 import           Control.Monad.IO.Class
-
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Lazy as Lazy
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
@@ -34,39 +31,39 @@ import qualified Data.ByteString.Streaming.Internal as ByteStream
 type ByteStream = ByteStream.ByteString
 
 
-rechunk :: Monad m => Int -> ByteStream m a -> ByteStream m a
-rechunk sz =
-  let
-    mkAcc = Builder.byteString
-    mkStrict = Lazy.toStrict . Builder.toLazyByteString
+-- rechunk :: Monad m => Int -> ByteStream m a -> ByteStream m a
+-- rechunk sz =
+--   let
+--     mkAcc = Builder.byteString
+--     mkStrict = Lazy.toStrict . Builder.toLazyByteString
 
-    go acc i bs =
-      case bs of
-        ByteStream.Empty r ->
-          ByteStream.Empty r
+--     go acc i bs =
+--       case bs of
+--         ByteStream.Empty r ->
+--           ByteStream.Empty r
 
-        ByteStream.Chunk s rest ->
-          let
-            ss = ByteString.length s
-          in
-            if (ss + i >= sz) then
-              let
-                (emit, next) =
-                  ByteString.splitAt (sz - i) s
+--         ByteStream.Chunk s rest ->
+--           let
+--             ss = ByteString.length s
+--           in
+--             if (ss + i >= sz) then
+--               let
+--                 (emit, next) =
+--                   ByteString.splitAt (sz - i) s
 
-              in
-                ByteStream.Chunk (mkStrict (acc <> mkAcc emit)) $
-                  go mempty 0 $ ByteStream.Chunk next rest
+--               in
+--                 ByteStream.Chunk (mkStrict (acc <> mkAcc emit)) $
+--                   go mempty 0 $ ByteStream.Chunk next rest
 
-            else
-              go (acc <> mkAcc s) (i + ss) rest
+--             else
+--               go (acc <> mkAcc s) (i + ss) rest
 
-        ByteStream.Go act ->
-          ByteStream.Go $
-            fmap (go acc i) act
+--         ByteStream.Go act ->
+--           ByteStream.Go $
+--             fmap (go acc i) act
 
-  in
-    go mempty 0
+--   in
+--     go mempty 0
 
 
 streamingLength :: Monad m => ByteStream m a -> ByteStream m (Of Word64 a)
