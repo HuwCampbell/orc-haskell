@@ -114,6 +114,9 @@ module Orc.Prelude (
   , Traversable (..)
   , for
   , traverse_
+  , ifoldr
+  , itraverse
+  , ifor
 
   -- * Strict Maybe
   ,  Maybe'(..)
@@ -446,3 +449,20 @@ fromMaybeM' = flip maybe' pure
 catMaybes' :: [Maybe' a] -> [a]
 catMaybes' as =
   [ a | Just' a <- toList as ]
+
+
+
+-- Using unboxed ints here doesn't seem to result in any benefit
+ifoldr :: (Int -> a -> b -> b) -> b -> [a] -> b
+ifoldr f z xs = foldr (\x g i -> f i x (g (i+1))) (const z) xs 0
+{-# INLINE ifoldr #-}
+
+itraverse :: Applicative m => (Int -> a -> m b) -> [a] -> m [b]
+itraverse f as = ifoldr k (pure []) as
+  where
+    k i a r = (:) <$> f i a <*> r
+{-# INLINE itraverse #-}
+
+ifor :: Applicative m => [a] -> (Int -> a -> m b) -> m [b]
+ifor = flip itraverse
+{-# INLINE ifor #-}

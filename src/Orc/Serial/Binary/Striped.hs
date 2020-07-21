@@ -35,7 +35,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
-import           Data.Word (Word32)
+import           Data.Word (Word8, Word32)
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
@@ -189,6 +189,10 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     liftMaybe "Required Field Missing"
       (siFooterLength stripeInfo)
 
+  numRows <-
+    liftMaybe "Required Field Missing - Number of Rows"
+      (siNumberOfRows stripeInfo)
+
   --
   -- Jump over the row index streams.
   -- These are only really useful when doing filtering statistics, or skipping.
@@ -228,22 +232,22 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     hSeek handle AbsoluteSeek dataBytesStart
 
   column <-
-    decodeTable typeInfo mCompressionInfo columnsEncodings nonRowIndexStreams $
+    decodeTable numRows typeInfo mCompressionInfo columnsEncodings nonRowIndexStreams $
       ByteStream.hGet handle $ fromIntegral rdLength
 
   return (stripeInfo, column)
 
 
-decodeTable :: MonadIO m => Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteStream m () -> EitherT String m Column
-decodeTable typs mCompression encodings orcStreams dataBytes =
-  evalStateT (runReaderT (decodeColumn typs) mCompression) (makeIndexed encodings, orcStreams, dataBytes)
+decodeTable :: MonadIO m => Word64 -> Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteStream m () -> EitherT String m Column
+decodeTable rows typs mCompression encodings orcStreams dataBytes =
+  evalStateT (runReaderT (decodeColumn typs rows) mCompression) (makeIndexed encodings, orcStreams, dataBytes)
 
 
 type OrcDecode m = ReaderT (Maybe CompressionKind) (StateT (Indexed Orc.ColumnEncoding, [Orc.Stream], ByteStream m ()) (EitherT String m))
 
 
-withPresence :: Monad m => OrcDecode m (Column -> Column)
-withPresence = do
+withPresence :: Monad m => Word64 -> (Word64 -> OrcDecode m Column) -> OrcDecode m Column
+withPresence rows act = do
   (ix, streams0, _bytes) <- get
   case streams0 of
     s:_ | streamColumn s == Just (currentIndex ix) && streamKind s == Just SK_PRESENT -> do
@@ -253,12 +257,18 @@ withPresence = do
 
       presenceColumn <-
         liftEither $
-          decodeBits presenceBytes
+          fmap (Storable.take (fromIntegral rows)) $
+            decodeBits presenceBytes
 
-      return $ Partial presenceColumn
+      let
+        innerRows =
+          fromIntegral . Storable.length $
+            Storable.filter id presenceColumn
+
+      Partial presenceColumn <$> act innerRows
 
     _else ->
-      return id
+      act rows
 
 
 popStream :: Monad m => OrcDecode m ByteString
@@ -325,16 +335,16 @@ currentEncoding = do
 -- | Read a Column including if its nullable.
 --
 --   After we're done, increment the column index.
-decodeColumn :: Monad m => Type -> OrcDecode m Column
-decodeColumn typs =
-  withPresence <*> decodeColumnPart typs <* incrementColumn
+decodeColumn :: Monad m => Type -> Word64 -> OrcDecode m Column
+decodeColumn typs rows =
+  withPresence rows (decodeColumnPart typs) <* incrementColumn
 
 
 -- | Read a Column
 --
 --   The present column component has already been handled.
-decodeColumnPart :: Monad m => Type -> OrcDecode m Column
-decodeColumnPart typs = do
+decodeColumnPart :: Monad m => Type -> Word64 -> OrcDecode m Column
+decodeColumnPart typs rows = do
   currentEncoding' <-
      currentEncoding
 
@@ -410,7 +420,7 @@ decodeColumnPart typs = do
 
     (STRUCT fields, _) ->
       nestedColumn $
-        decodeStruct fields
+        decodeStruct rows fields
 
     (UNION fields, _) -> do
       tagBytes <-
@@ -422,7 +432,7 @@ decodeColumnPart typs = do
 
       nestedColumn $
         Union tags . Boxed.fromList
-          <$> for fields decodeColumn
+          <$> ifor fields (\i f -> decodeColumn f (tagsRows i tags))
 
     (LIST typ, enc) -> do
       lengthBytes <-
@@ -433,7 +443,7 @@ decodeColumnPart typs = do
 
       nestedColumn $
         List lengths
-          <$> decodeColumn typ
+          <$> decodeColumn typ (Storable.sum (Storable.map fromIntegral lengths))
 
     (MAP keyTyp valTyp, enc) -> do
       lengthBytes <-
@@ -444,8 +454,8 @@ decodeColumnPart typs = do
 
       nestedColumn $
         Map lengths
-          <$> decodeColumn keyTyp
-          <*> decodeColumn valTyp
+          <$> decodeColumn keyTyp rows
+          <*> decodeColumn valTyp rows
 
 
 decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
@@ -519,11 +529,22 @@ decodeStringDictionary decodeIntegerFunc = do
     discovered
 
 
-decodeStruct :: Monad m => [StructField Type] -> OrcDecode m Column
-decodeStruct fields =
+decodeStruct :: Monad m => Word64 -> [StructField Type] -> OrcDecode m Column
+decodeStruct rows fields =
   fmap (Struct . Boxed.fromList) $
     for fields $
-      traverse decodeColumn
+      traverse (decodeColumn ? rows)
+
+
+tagsRows :: Int -> Storable.Vector Word8 -> Word64
+tagsRows ix0 = do
+  let
+    ix = fromIntegral ix0
+
+  fromIntegral
+    . Storable.length
+    . Storable.filter (== ix)
+
 
 
 liftMaybe :: MonadError e m => e -> Maybe a -> m a
@@ -545,7 +566,9 @@ putOrcFile mCmprssn file column =
         putOrcStream $
           Streaming.hoist lift column
 
+
 type OrcEncode m = ReaderT (Maybe CompressionKind) (EitherT String m)
+
 
 putOrcStream :: (MonadIO m) => Streaming.Stream (Of Column) (OrcEncode m) () -> ByteStream (OrcEncode m) ()
 putOrcStream column = do
@@ -819,3 +842,6 @@ streamUncompressed_ = streamingLength . streamingPut
 i2w32 :: Int -> Word32
 i2w32 = fromIntegral
 {-# INLINE i2w32 #-}
+
+(?) :: (a -> b -> c) -> b -> a -> c
+(?) = flip

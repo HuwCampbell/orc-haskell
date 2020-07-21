@@ -16,6 +16,7 @@ import           Data.String (String)
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
+import qualified Streaming.Prelude as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
 
 import           Orc.Serial.Binary.Striped
@@ -42,7 +43,9 @@ withOrcStream
   -> EitherT String IO r
 withOrcStream fs action =
   withOrcStripes fs $
-    action . streamLogical
+    action .
+      streamLogical .
+        Streaming.map snd
 
 
 -- | Simple pretty printer of ORC to JSON.

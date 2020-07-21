@@ -40,15 +40,15 @@ import qualified Data.Vector.Storable as Storable
 
 streamLogical
   :: Monad m
-  => Streaming.Stream (Of (StripeInformation, Striped.Column)) m x
+  => Streaming.Stream (Of Striped.Column) m x
   -> Streaming.Stream (Of Logical.Row) m x
 streamLogical ss =
   Streaming.for ss $
-    Streaming.each . uncurry toLogical
+    Streaming.each . toLogical
 
 
-toLogical :: StripeInformation -> Striped.Column -> Boxed.Vector Logical.Row
-toLogical stripeInfo =
+toLogical :: Striped.Column -> Boxed.Vector Logical.Row
+toLogical =
   go
     where
   go = \case
@@ -92,11 +92,8 @@ toLogical stripeInfo =
         boxed =
           Boxed.convert bools
 
-        taken =
-          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) (siNumberOfRows stripeInfo)
-
       in
-        fmap Logical.Bool taken
+        fmap Logical.Bool boxed
 
     Striped.Bytes x ->
       let
@@ -188,13 +185,10 @@ toLogical stripeInfo =
         boxed =
           Boxed.convert present
 
-        taken =
-          maybe boxed (\len -> Boxed.take (fromIntegral len) boxed) (siNumberOfRows stripeInfo)
-
       in
         fmap Logical.Partial $
           fst $ flip runState 0 $
-            Boxed.forM taken $ \here ->
+            Boxed.forM boxed $ \here ->
               if here then do
                 current <- get
                 let

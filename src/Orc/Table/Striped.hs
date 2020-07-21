@@ -33,11 +33,6 @@ data Column
   | List      !(Storable.Vector Word32) !Column
   | Map       !(Storable.Vector Word32) !Column !Column
 
-  -- Danger:
-  --   Bool and Presence vectors can be up to 7 bits longer
-  --   than one might think, as they are represented as packed
-  --   bytes.
-
   -- Primitive Columns
   | Bool      !(Storable.Vector Bool)
   | Bytes     !(Storable.Vector Word8)
