@@ -134,6 +134,12 @@ writeCompressedStream = \case
     trivial
   Just SNAPPY ->
     Right . writeSnappyParts
+  Just ZLIB ->
+    Right . writeZlibParts
+  Just ZSTD ->
+    Right . writeZstdParts
+  Just LZO ->
+    Right . writeLzoParts
   Just _ ->
     const (Left "Unsupported Compression Type")
 
@@ -141,13 +147,14 @@ writeCompressedStream = \case
     trivial =
       Right . Builder.byteString
 
-writeSnappyParts :: ByteString -> Builder
-writeSnappyParts uncompressed =
+
+writeCompressedParts :: (ByteString -> ByteString) -> ByteString -> Builder
+writeCompressedParts action uncompressed =
   let
     len =
       ByteString.length uncompressed
     compressed =
-      Snapper.compress uncompressed
+      action uncompressed
     lenCompressed =
       ByteString.length compressed
 
@@ -158,3 +165,16 @@ writeSnappyParts uncompressed =
     else
       let header = 2 * len + 1
       in  Put.word24LE (fromIntegral header) <> Builder.byteString uncompressed
+
+
+writeSnappyParts :: ByteString -> Builder
+writeSnappyParts = writeCompressedParts Snapper.compress
+
+writeZlibParts :: ByteString -> Builder
+writeZlibParts = writeCompressedParts (overLazy Zlib.compress)
+
+writeZstdParts :: ByteString -> Builder
+writeZstdParts = writeCompressedParts (Zstd.compress Zstd.maxCLevel)
+
+writeLzoParts :: ByteString -> Builder
+writeLzoParts = writeCompressedParts (Lzo.compress)

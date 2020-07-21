@@ -43,7 +43,10 @@ rewrite =
     cmprssnReadM = eitherReader $
       \x -> case x of
         "snappy" -> Right SNAPPY
-        _        -> Left "Not yet supported compression kind"
+        "zlib"   -> Right ZLIB
+        "zstd"   -> Right ZSTD
+        "lzo"    -> Right LZO
+        _        -> Left ("Unsupported compression kind: " <> x)
 
 
 main :: IO ()

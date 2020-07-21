@@ -9,7 +9,6 @@
 module Orc.X.Streaming (
     streamingLength
   , hyloByteStream
-  , hyloByteStream_
   , streamingPut
   , rechunk
 ) where
@@ -18,7 +17,6 @@ import           Orc.Prelude
 
 import           Control.Monad.IO.Class
 
-import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as Lazy
 
@@ -86,24 +84,6 @@ streamingLength =
         ByteStream.Go $
           fmap (go n) act
 {-# INLINE streamingLength #-}
-
-
-
-hyloByteStream_ :: Monad m => (a -> ByteStream m x) -> Streaming.Stream (Of a) m r -> ByteStream m r
-hyloByteStream_ step =
-    loop
-  where
-    loop = \case
-      Streaming.Return r ->
-        ByteStream.Empty r
-
-      Streaming.Effect m ->
-        ByteStream.mwrap $
-          loop <$> m
-
-      Streaming.Step (a :> rest) -> do
-        step a
-        loop rest
 
 
 hyloByteStream :: Monad m => (x -> a -> ByteStream m x) -> x -> Streaming.Stream (Of a) m r -> ByteStream m (Of x r)
