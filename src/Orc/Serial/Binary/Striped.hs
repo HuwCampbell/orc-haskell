@@ -731,7 +731,7 @@ putColumnPart = \case
     _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
     (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.map lazyNano nanos)
     _          <- record (\ix -> Stream (Just SK_SECONDARY) (Just ix) (Just l1))
-    return DECIMAL
+    return TIMESTAMP
 
 
   Date dates -> do

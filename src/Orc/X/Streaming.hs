@@ -10,7 +10,6 @@ module Orc.X.Streaming (
     streamingLength
   , hyloByteStream
   , streamingPut
-  -- , rechunk
 ) where
 
 import           Orc.Prelude
