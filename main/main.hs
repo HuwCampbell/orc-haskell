@@ -7,6 +7,7 @@ import           Data.Text (pack)
 
 import           Orc.Serial.Binary.Striped
 import           Orc.Serial.Binary.Logical
+import           Orc.Schema.Types
 
 import           Options.Applicative
 
@@ -22,7 +23,7 @@ parser =
 
 data Command
   = Json FilePath
-  | Rewrite FilePath FilePath
+  | Rewrite FilePath FilePath (Maybe CompressionKind)
   deriving (Eq, Show)
 
 
@@ -31,7 +32,18 @@ json = Json <$> strArgument (metavar "ORC_FILE" <> help "Orc file to print as JS
 
 
 rewrite :: Parser Command
-rewrite = Rewrite <$> strArgument (metavar "ORC_FILE") <*> strArgument (metavar "OUT_ORC_FILE")
+rewrite =
+  Rewrite
+    <$> strArgument (metavar "ORC_FILE")
+    <*> strArgument (metavar "OUT_ORC_FILE")
+    <*> optional (option cmprssnReadM (long "compression"))
+
+  where
+    cmprssnReadM :: ReadM CompressionKind
+    cmprssnReadM = eitherReader $
+      \x -> case x of
+        "snappy" -> Right SNAPPY
+        _        -> Left "Not yet supported compression kind"
 
 
 main :: IO ()
@@ -43,7 +55,7 @@ main = do
       Json orcIn ->
         printOrcFile orcIn
 
-      Rewrite orcIn orcOut ->
+      Rewrite orcIn orcOut cmprssn ->
         withOrcStripes orcIn $
-          putOrcFile orcOut . Streaming.map snd
+          putOrcFile cmprssn orcOut . Streaming.map snd
 

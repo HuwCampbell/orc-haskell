@@ -19,7 +19,7 @@ module Orc.Serial.Binary.Striped (
 import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
 import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, modify')
-import           Control.Monad.Reader (ReaderT (..), runReaderT, ask)
+import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
@@ -537,15 +537,17 @@ liftMaybe =
 
 
 
-putOrcFile :: (MonadTransControl t, MonadIO (t IO), MonadError String (t IO)) => FilePath -> Streaming.Stream (Of Column) (t IO) () -> t IO ()
-putOrcFile file column =
+putOrcFile :: Maybe CompressionKind -> FilePath -> Streaming.Stream (Of Column) (EitherT String IO) () -> EitherT String IO ()
+putOrcFile mCmprssn file column =
   withFileLifted file WriteMode $ \handle -> do
-    ByteStream.toHandle handle $
-      putOrcStream column
+    flip runReaderT mCmprssn $
+      ByteStream.toHandle handle $
+        putOrcStream $
+          Streaming.hoist lift column
 
+type OrcEncode m = ReaderT (Maybe CompressionKind) (EitherT String m)
 
-
-putOrcStream :: (MonadError String m, MonadIO m) => Streaming.Stream (Of Column) m () -> ByteStream m ()
+putOrcStream :: (MonadIO m) => Streaming.Stream (Of Column) (OrcEncode m) () -> ByteStream (OrcEncode m) ()
 putOrcStream column = do
   "ORC"
 
@@ -565,12 +567,14 @@ putOrcStream column = do
           []
           Nothing
 
+  cmprssn <- lift ask
+
   psLength :> () <-
     streamUncompressed_ $
       putPostScript $
         PostScript
           (fromIntegral footerLen)
-          (Just SNAPPY)
+          cmprssn
           Nothing
           [0,12]
           Nothing
@@ -584,7 +588,7 @@ putOrcStream column = do
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 
-putTable :: (MonadError String m, MonadIO m) => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
+putTable :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
 putTable (start, sis, _) column = do
   numRows <- lift $ liftEither $ Striped.length column
 
@@ -646,12 +650,12 @@ simpleEncoding colEncKind =
   fullEncoding (Orc.ColumnEncoding colEncKind Nothing)
 
 
-putColumn :: (MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
+putColumn :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumn col =
   putColumnPart col <* lift incColumn
 
 
-putColumnPart :: (MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
+putColumnPart :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumnPart = \case
   Bool bits   -> do
     _          <- simpleEncoding DIRECT
@@ -786,7 +790,7 @@ putColumnPart = \case
     putColumnPart inner
 
 
-putStringColumn :: (MonadError String m, MonadIO m) => Boxed.Vector ByteString -> ByteStream (StateT StripeState m) ()
+putStringColumn :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Boxed.Vector ByteString -> ByteStream (StateT StripeState m) ()
 putStringColumn strs = do
   _          <- simpleEncoding DIRECT
   (l0 :> _)  <- stream_ $ for strs Put.putByteString
@@ -797,11 +801,12 @@ putStringColumn strs = do
   return ()
 
 
-stream_ :: (MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
+stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
 stream_ p =
     streamingLength . ByteStream.mwrap $ do
+      cmprssn     <- ask
       strict :> a <- ByteStream.toStrict (streamingPut p )
-      blah        <- liftEither $ writeCompressedStream (Just SNAPPY) strict
+      blah        <- liftEither $ writeCompressedStream cmprssn strict
       return $ ByteStream.toStreamingByteString blah $> a
 {-# INLINABLE stream_ #-}
 
