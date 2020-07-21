@@ -160,8 +160,8 @@ prop_spec_delta_IntegerRLEv2 =
 
 
 
-prop_spec_delta_nanos :: Property
-prop_spec_delta_nanos =
+prop_spec_nanoseconds_roundtrip :: Property
+prop_spec_nanoseconds_roundtrip =
   property $ do
     x <-
       forAll $

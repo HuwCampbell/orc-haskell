@@ -561,7 +561,7 @@ liftMaybe =
 putOrcFile :: Maybe CompressionKind -> FilePath -> Streaming.Stream (Of Column) (EitherT String IO) () -> EitherT String IO ()
 putOrcFile mCmprssn file column =
   withFileLifted file WriteMode $ \handle -> do
-    flip runReaderT mCmprssn $
+    runReaderT ? mCmprssn $
       ByteStream.toHandle handle $
         putOrcStream $
           Streaming.hoist lift column
@@ -617,7 +617,7 @@ putTable (start, sis, _) column = do
 
   (lenD :> (typ,(_,e,s))) <-
     streamingLength $
-      flip runStateT (0,[],[]) $ do
+      runStateT ? (0,[],[]) $ do
         ByteStream.distribute $
           putColumn column
 
@@ -845,3 +845,4 @@ i2w32 = fromIntegral
 
 (?) :: (a -> b -> c) -> b -> a -> c
 (?) = flip
+{-# INLINE (?) #-}

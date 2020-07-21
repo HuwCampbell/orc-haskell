@@ -5,9 +5,7 @@ import           Criterion
 import           Criterion.Main
 
 import           Data.Word (Word32)
-import qualified Data.Serialize.Get as Get
 import qualified Data.Serialize.Put as Put
-import qualified Data.ByteString as Strict
 
 import qualified Data.Vector.Storable as Storable
 

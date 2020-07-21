@@ -45,6 +45,7 @@ getOrcNumBe n =
     unZigZag <$> go 0 n
 {-# INLINE getOrcNumBe #-}
 
+
 -- | Read an Orc Num for patched base
 --
 --   Base value (BW bytes) - The base value is stored as a big

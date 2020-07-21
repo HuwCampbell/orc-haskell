@@ -47,7 +47,7 @@ import qualified Data.Serialize.IEEE754 as IEEE754
 import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
-import           Data.Word (Word8)
+import           Data.Word (Word8, Word16, Word32)
 import           Data.String (String)
 import qualified Data.List as List
 
@@ -254,14 +254,29 @@ putIntegerRLEv1 =
   in
     putSet
 
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int8) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int16) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int32) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int64) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word8) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word16) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word32) #-}
+{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word64) #-}
 
--- {-# INLINE decodeIntegerRLEv2 #-}
+{-# INLINE decodeIntegerRLEv2 #-}
 decodeIntegerRLEv2 :: forall w . OrcNum w => ByteString ->  Either String (Storable.Vector w)
 decodeIntegerRLEv2 =
   Get.runGet getIntegerRLEv2
 
 
--- {-# INLINE getIntegerRLEv2 #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int8) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int16) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int32) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int64) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Word8) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Word16) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Word32) #-}
+{-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Word64) #-}
 getIntegerRLEv2 :: forall w . OrcNum w => Get (Storable.Vector w)
 getIntegerRLEv2 =
   let
@@ -310,7 +325,7 @@ getIntegerRLEv2 =
       consumeMany getSet
 
 
--- {-# INLINE getShortRepeat #-}
+{-# INLINE getShortRepeat #-}
 getShortRepeat :: forall w . OrcNum w => Get (Storable.Vector w)
 getShortRepeat = do
   header <- Get.getWord8
@@ -325,7 +340,7 @@ getShortRepeat = do
     Storable.replicate (fromIntegral repeats) value
 
 
--- {-# INLINE getDirect #-}
+{-# INLINE getDirect #-}
 getDirect :: forall w . OrcNum w => Get (Storable.Vector w)
 getDirect = do
   header <- Get.getWord16be
@@ -352,7 +367,7 @@ getDirect = do
       readLongsNative dataBytes repeats width
 
 
--- {-# INLINE getPatchedBase #-}
+{-# INLINE getPatchedBase #-}
 getPatchedBase :: forall w . OrcNum w => Get (Storable.Vector w)
 getPatchedBase = do
   header <- Get.getWord32be
@@ -426,7 +441,7 @@ getPatchedBase = do
     adjustedValue
 
 
--- {-# INLINE getDelta #-}
+{-# INLINE getDelta #-}
 getDelta :: forall w . OrcNum w => Get (Storable.Vector w)
 getDelta = do
   header <- Get.getWord16be
@@ -481,7 +496,7 @@ getDelta = do
   return $
     Storable.scanl' op baseValue scanVec
 
-{-# INLINE readLongsNative #-}
+
 readLongsNative :: ByteString -> Word64 -> Word64 -> Storable.Vector Word64
 readLongsNative bytes len bitsize =
   unsafePerformIO $ do
@@ -555,6 +570,7 @@ lazyNano nano =
       (nano_ `shiftL` 3) .|. (zeros_ - 1)
     else
       nano `shiftL` 3
+{-# INLINE lazyNano #-}
 
 
 normalizePositive :: (Word64, Word64) -> (Word64, Word64)
