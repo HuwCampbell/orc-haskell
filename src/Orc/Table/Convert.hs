@@ -319,10 +319,9 @@ fromLogical' schema rows =
       rows_  <- note "Take List" $ traverse takeList rows
       let
         lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
-      ls0    <- traverse (fromLogical t) rows_ <|> pure (Boxed.empty)
-      ls1    <- Striped.concat (toList ls0)
+      ls0    <- fromLogical t (Boxed.concat (Boxed.toList rows_))
       return $
-        Striped.List lens ls1
+        Striped.List lens ls0
 
     MAP kt vt -> do
       rows_  <- note "Take Map" $ traverse takeMap rows
@@ -330,12 +329,10 @@ fromLogical' schema rows =
         ks    = fmap (fmap fst) rows_
         vs    = fmap (fmap snd) rows_
         lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
-      ks0    <- traverse (fromLogical kt) ks
-      ks1    <- Striped.concat (toList ks0)
-      vs0    <- traverse (fromLogical vt) vs
-      vs1    <- Striped.concat (toList vs0)
+      ks0    <- fromLogical kt (Boxed.concat (Boxed.toList ks))
+      vs0    <- fromLogical vt (Boxed.concat (Boxed.toList vs))
       return $
-        Striped.Map lens ks1 vs1
+        Striped.Map lens ks0 vs0
 
     UNION innerTypes -> do
       rows_  <- note "Take Union" $ traverse takeUnion rows
@@ -378,6 +375,7 @@ fromLogical' schema rows =
 
 
 normalizePositive :: (Integer, Integer) -> (Integer, Integer)
+normalizePositive (0, n) = (0, n)
 normalizePositive (!c, !n) =
   case divMod c 10 of
     (c', r)

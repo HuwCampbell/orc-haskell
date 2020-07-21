@@ -140,16 +140,22 @@ test-suite test
 
   other-modules:       Test.Orc.Streams.Bytes
                        Test.Orc.Streams.Integer
+                       Test.Orc.Type
+                       Test.Orc.Logical
 
   build-depends:
                        base                            >= 3          && < 5
                      , orc-haskell
                      , cereal
                      , bytestring
+                     , Decimal
                      , filepath                        >= 1.3        && < 1.5
                      , hedgehog
                      , hedgehog-corpus
-                     , temporary-resourcet             == 0.1.*
+                     , mmorph
+                     , resourcet
+                     , streaming
+                     , temporary-resourcet
                      , transformers
                      , transformers-either
                      , vector

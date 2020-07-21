@@ -444,9 +444,12 @@ decodeColumnPart typs rows = do
       lengths <-
         liftEither (decodeIntegerRLEversion enc lengthBytes)
 
+      let
+        nestedRows = Storable.sum (Storable.map fromIntegral lengths)
+
       nestedColumn $
         List lengths
-          <$> decodeColumn typ (Storable.sum (Storable.map fromIntegral lengths))
+          <$> decodeColumn typ nestedRows
 
     (MAP keyTyp valTyp, enc) -> do
       lengthBytes <-
@@ -455,10 +458,13 @@ decodeColumnPart typs rows = do
       lengths <-
         liftEither (decodeIntegerRLEversion enc lengthBytes)
 
+      let
+        nestedRows = Storable.sum (Storable.map fromIntegral lengths)
+
       nestedColumn $
         Map lengths
-          <$> decodeColumn keyTyp rows
-          <*> decodeColumn valTyp rows
+          <$> decodeColumn keyTyp nestedRows
+          <*> decodeColumn valTyp nestedRows
 
 
 decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)

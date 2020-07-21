@@ -19,6 +19,7 @@ import           Data.Word (Word8, Word32)
 import           Data.WideWord (Int128)
 
 import           Orc.Data.Data
+import           Orc.Schema.Types
 
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
@@ -123,12 +124,53 @@ length = \case
     Right $ Storable.length x
 
 
-concat :: [Column] -> Either String Column
-concat xs = case xs of
+concat :: Type -> [Column] -> Either String Column
+concat typ xs  = case xs of
   (x:xss) ->
     foldM append x xss
   _ ->
-    Left "Can't concatenated an empty list of columns."
+    Right (emptyOf typ)
+
+
+emptyOf :: Type -> Column
+emptyOf = \case
+  BOOLEAN ->
+    Bool Storable.empty
+  BYTE ->
+    Bytes Storable.empty
+  SHORT ->
+    Short Storable.empty
+  INT ->
+    Integer Storable.empty
+  LONG ->
+    Long Storable.empty
+  FLOAT ->
+    Float Storable.empty
+  DOUBLE ->
+    Double Storable.empty
+  STRING ->
+    String Boxed.empty
+  BINARY ->
+    Binary Boxed.empty
+  DATE ->
+    Date Storable.empty
+  VARCHAR ->
+    VarChar Boxed.empty
+  CHAR ->
+    Char Boxed.empty
+  TIMESTAMP ->
+    Timestamp Storable.empty Storable.empty
+  LIST it ->
+    List Storable.empty (emptyOf it)
+  MAP kt vt ->
+    Map Storable.empty (emptyOf kt) (emptyOf vt)
+  STRUCT kts ->
+    Struct $ Boxed.fromList (fmap (fmap emptyOf) kts)
+  UNION uts ->
+    Union Storable.empty $ Boxed.fromList (fmap emptyOf uts)
+  DECIMAL ->
+    Decimal Storable.empty Storable.empty
+
 
 
 append :: Column -> Column -> Either String Column

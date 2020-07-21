@@ -574,6 +574,7 @@ encodeNanoseconds nano =
 
 
 normalizePositive :: (Word64, Word64) -> (Word64, Word64)
+normalizePositive (0, n) = (0, n)
 normalizePositive (!c, !n) =
   case divMod c 10 of
     (c', r)
