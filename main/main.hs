@@ -7,8 +7,7 @@ import           Data.Text (pack)
 
 import           Orc.Serial.Binary.Striped
 import           Orc.Serial.Binary.Logical
-import           Orc.Table.Convert
-import           Orc.Schema.Types
+import           Orc.Schema.Types (CompressionKind (..))
 
 import           Options.Applicative
 
@@ -31,26 +30,28 @@ data Command
 
 
 json :: Parser Command
-json = Json <$> strArgument (metavar "ORC_FILE" <> help "Orc file to print as JSON")
+json = Json <$> strArgument (metavar "INPUT" <> help "Orc file to print as JSON")
 
 
 rewrite :: Parser Command
 rewrite =
   Rewrite
-    <$> strArgument (metavar "ORC_FILE")
-    <*> strArgument (metavar "OUT_ORC_FILE")
-    <*> optional (option cmprssnReadM (long "compression"))
+    <$> strArgument (metavar "INPUT" <> help "Orc file to read from")
+    <*> strArgument (metavar "OUTPUT" <> help "Orc file to write to")
+    <*> optional (option compressionReadM (long "compression" <> help "Compression format to use"))
+
 
 roundTrip :: Parser Command
 roundTrip =
   RoundTrip
-    <$> strArgument (metavar "ORC_FILE")
-    <*> strArgument (metavar "OUT_ORC_FILE")
-    <*> optional (option cmprssnReadM (long "compression"))
-    <*> option auto (long "chunk-size" <> Options.Applicative.value 10000)
+    <$> strArgument (metavar "INPUT" <> help "Orc file to read from")
+    <*> strArgument (metavar "OUTPUT" <> help "Orc file to write to")
+    <*> optional (option compressionReadM (long "compression" <> help "Compression format to use"))
+    <*> option auto (long "chunk-size" <> Options.Applicative.value 10000 <> help "Number of rows in each stripe" <> showDefault)
 
-cmprssnReadM :: ReadM CompressionKind
-cmprssnReadM = eitherReader $
+
+compressionReadM :: ReadM CompressionKind
+compressionReadM = eitherReader $
   \x -> case x of
     "snappy" -> Right SNAPPY
     "zlib"   -> Right ZLIB
@@ -74,5 +75,4 @@ main = do
 
       RoundTrip orcIn orcOut cmprssn chunks ->
         withOrcStream orcIn $ \typ ->
-          putOrcFile cmprssn orcOut .
-            streamFromLogical chunks typ
+          putOrcStream typ cmprssn chunks orcOut

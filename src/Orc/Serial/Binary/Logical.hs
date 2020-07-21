@@ -6,6 +6,7 @@
 
 module Orc.Serial.Binary.Logical (
     withOrcStream
+  , putOrcStream
   , printOrcFile
 ) where
 
@@ -23,7 +24,7 @@ import           Orc.Schema.Types
 import           Orc.Serial.Binary.Striped
 import           Orc.Serial.Json.Logical
 
-import           Orc.Table.Convert (streamLogical)
+import           Orc.Table.Convert (streamLogical, streamFromLogical)
 import qualified Orc.Table.Logical as Logical
 
 import           System.IO as IO
@@ -59,3 +60,10 @@ printOrcFile fp = do
     ByteStream.stdout
       . ByteStream.concat
       . Streaming.maps (\(x :> r) -> ppJsonRow x $> r)
+
+
+
+putOrcStream :: Type -> Maybe CompressionKind -> Int -> FilePath -> Streaming.Stream (Of Logical.Row) (EitherT String IO) () -> EitherT String IO ()
+putOrcStream typ mCompression chunkSize fp =
+  putOrcFile mCompression fp .
+    streamFromLogical chunkSize typ

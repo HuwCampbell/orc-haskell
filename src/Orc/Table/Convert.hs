@@ -308,13 +308,11 @@ fromLogical' schema rows =
       rows_  <- note "Take Struct" $ traverse takeStruct rows
       let
         cols0 = transpose rows_
-        colsX = Boxed.zip (Boxed.fromList $ fmap fieldValue fts) cols0
-        names = Boxed.fromList (fmap fieldName fts)
+        colsX = Boxed.zip (Boxed.fromList $ fts) cols0
 
-      cols   <- traverse (uncurry fromLogical) colsX
-
+      cols   <- traverse (\(ft, c) -> traverse (flip fromLogical c) ft) colsX
       return $
-        Striped.Struct $ Boxed.zipWith StructField names cols
+        Striped.Struct cols
 
     LIST t -> do
       rows_  <- note "Take List" $ traverse takeList rows
