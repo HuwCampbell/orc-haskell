@@ -568,11 +568,11 @@ putOrcStream column = do
           Nothing
 
   psLength :> () <-
-    stream_ $
+    streamUncompressed_ $
       putPostScript $
         PostScript
           (fromIntegral footerLen)
-          (Just NONE)
+          (Just SNAPPY)
           Nothing
           [0,12]
           Nothing
@@ -648,12 +648,12 @@ simpleEncoding colEncKind =
   fullEncoding (Orc.ColumnEncoding colEncKind Nothing)
 
 
-putColumn :: MonadIO m => Column -> ByteStream (StateT StripeState m) Type
+putColumn :: (MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumn col =
   putColumnPart col <* lift incColumn
 
 
-putColumnPart :: MonadIO m => Column -> ByteStream (StateT StripeState m) Type
+putColumnPart :: (MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumnPart = \case
   Bool bits   -> do
     _          <- simpleEncoding DIRECT
@@ -788,7 +788,7 @@ putColumnPart = \case
     putColumnPart inner
 
 
-putStringColumn :: MonadIO m => Boxed.Vector ByteString -> ByteStream (StateT StripeState m) ()
+putStringColumn :: (MonadError String m, MonadIO m) => Boxed.Vector ByteString -> ByteStream (StateT StripeState m) ()
 putStringColumn strs = do
   _          <- simpleEncoding DIRECT
   (l0 :> _)  <- stream_ $ for strs Put.putByteString
@@ -799,9 +799,18 @@ putStringColumn strs = do
   return ()
 
 
-stream_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
-stream_ = streamingLength . untied
-{-# INLINE stream_ #-}
+stream_ :: (MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
+stream_ p =
+    streamingLength . ByteStream.mwrap $ do
+      strict :> a <- ByteStream.toStrict (untied p )
+      blah        <- liftEither $ writeCompressedStream (Just SNAPPY) strict
+      return $ ByteStream.toStreamingByteString blah $> a
+{-# INLINABLE stream_ #-}
+
+
+streamUncompressed_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
+streamUncompressed_ = streamingLength .untied
+{-# INLINABLE streamUncompressed_ #-}
 
 
 untied :: MonadIO m => PutM a -> ByteStream m a

@@ -6,6 +6,7 @@
 
 module Orc.Serial.Binary.Internal.Compression (
     readCompressedStream
+  , writeCompressedStream
 ) where
 
 import           Control.Exception (tryJust, evaluate)
@@ -15,10 +16,13 @@ import qualified Data.Serialize.Get as Get
 import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
+import           Data.ByteString.Builder (Builder)
+import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as Lazy
 
 import           Orc.Schema.Types as Orc
 import qualified Orc.Serial.Binary.Internal.Get as Get
+import qualified Orc.Serial.Binary.Internal.Put as Put
 
 import           System.IO.Unsafe as Unsafe
 
@@ -30,6 +34,9 @@ import           Codec.Compression.Zlib.Internal (DecompressError)
 import qualified Codec.Compression.Zstd as Zstd
 
 import           Orc.Prelude
+
+
+-- * Reading
 
 
 readCompressedStream :: Maybe CompressionKind -> ByteString -> Either String ByteString
@@ -114,3 +121,40 @@ readLzoParts =
       tryJust
         (\(e :: DecompressError) -> Just ("DEFLATE decompression failed with " <> show e))
         (evaluate $ Lzo.decompress pertinent len)
+
+
+-- * Writing
+
+
+writeCompressedStream :: Maybe CompressionKind -> ByteString -> Either String Builder
+writeCompressedStream = \case
+  Nothing ->
+    trivial
+  Just NONE ->
+    trivial
+  Just SNAPPY ->
+    Right . writeSnappyParts
+  Just _ ->
+    const (Left "Unsupported Compression Type")
+
+  where
+    trivial =
+      Right . Builder.byteString
+
+writeSnappyParts :: ByteString -> Builder
+writeSnappyParts uncompressed =
+  let
+    len =
+      ByteString.length uncompressed
+    compressed =
+      Snapper.compress uncompressed
+    lenCompressed =
+      ByteString.length compressed
+
+  in
+    if lenCompressed < len then
+      let header = 2 * len
+      in  Put.word24LE (fromIntegral header) <> Builder.byteString compressed
+    else
+      let header = 2 * len + 1
+      in  Put.word24LE (fromIntegral header) <> Builder.byteString uncompressed

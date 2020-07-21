@@ -41,6 +41,7 @@ library
                        Orc.Serial.Binary.Internal.Get
                        Orc.Serial.Binary.Internal.Integers
                        Orc.Serial.Binary.Internal.OrcNum
+                       Orc.Serial.Binary.Internal.Put
 
                        Orc.Serial.Json.Logical
 
@@ -100,6 +101,8 @@ executable main
                        base                            >= 3          && < 5
                      , orc-haskell
                      , filepath                        >= 1.3        && < 1.5
+                     , mmorph
+                     , mtl
                      , streaming
                      , text
                      , transformers
