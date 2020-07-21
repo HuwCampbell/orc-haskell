@@ -227,6 +227,7 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     columnsEncodings =
       columns stripeFooter
 
+  --
   -- Jump back to dataBytes
   liftIO $
     hSeek handle AbsoluteSeek dataBytesStart
@@ -409,7 +410,7 @@ decodeColumnPart typs rows = do
       seconds      <- liftEither (decodeIntegerRLEversion enc secondsBytes)
       nanos        <- liftEither (decodeIntegerRLEversion enc nanoBytes)
 
-      return $ Timestamp seconds (Storable.map parseNano nanos)
+      return $ Timestamp seconds (Storable.map decodeNanoseconds nanos)
 
     (DATE, enc) -> do
       dataBytes <- popStream
@@ -752,7 +753,7 @@ putColumnPart = \case
     _          <- simpleEncoding DIRECT
     (l0 :> _)  <- stream_ $ putIntegerRLEv1 seconds
     _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
-    (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.map lazyNano nanos)
+    (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.map encodeNanoseconds nanos)
     _          <- record (\ix -> Stream (Just SK_SECONDARY) (Just ix) (Just l1))
     return TIMESTAMP
 

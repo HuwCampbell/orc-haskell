@@ -28,8 +28,8 @@ module Orc.Serial.Binary.Internal.Integers (
   , decodeIntegerRLEv2
 
   , powerOfTen
-  , parseNano
-  , lazyNano
+  , decodeNanoseconds
+  , encodeNanoseconds
 ) where
 
 import           Control.Arrow ((&&&))
@@ -544,8 +544,8 @@ powerOfTen base power =
 --   The specification appears to be incorrect in specifying how to
 --   parse nanoseconds, or rather, it doesn't try. There's a broken
 --   sentence fragment, but whoever was writing it forgot to finish.
-parseNano :: Word64 -> Word64
-parseNano nano =
+decodeNanoseconds :: Word64 -> Word64
+decodeNanoseconds nano =
   let
     zeros =
       nano .&. 0x07
@@ -556,12 +556,12 @@ parseNano nano =
       result
     else
       result * (10 ^ (zeros + 1))
-{-# INLINE parseNano #-}
+{-# INLINE decodeNanoseconds #-}
 
 
-lazyNano :: Word64 -> Word64
-lazyNano 0 = 0
-lazyNano nano =
+encodeNanoseconds :: Word64 -> Word64
+encodeNanoseconds 0 = 0
+encodeNanoseconds nano =
   let
     (nano_, zeros_) =
       normalizePositive (nano, 0)
@@ -570,7 +570,7 @@ lazyNano nano =
       (nano_ `shiftL` 3) .|. (zeros_ - 1)
     else
       nano `shiftL` 3
-{-# INLINE lazyNano #-}
+{-# INLINE encodeNanoseconds #-}
 
 
 normalizePositive :: (Word64, Word64) -> (Word64, Word64)

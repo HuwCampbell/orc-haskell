@@ -33,6 +33,7 @@ import           Orc.X.Vector.Transpose (transpose)
 
 import           Orc.Prelude
 
+import qualified Data.Decimal as Decimal
 import           Data.String (String)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
@@ -278,7 +279,6 @@ fromLogical' schema rows =
       note "Float" $
       Striped.Float . Boxed.convert <$>
         traverse takeFloat rows
-
     DOUBLE ->
       note "Double" $
       Striped.Double . Boxed.convert <$>
@@ -338,12 +338,49 @@ fromLogical' schema rows =
       return $
         Striped.Map lens ks1 vs1
 
-    UNION _ -> do
-      _rows_  <- note "Take Union" $ traverse takeUnion rows
-      Left "Not finished UNION"
+    UNION innerTypes -> do
+      rows_  <- note "Take Union" $ traverse takeUnion rows
+      let
+        tags  = Boxed.convert $ fmap fst rows_
 
-    TIMESTAMP ->
-      Left "Not finished TIMESTAMP"
+      inners <- ifor innerTypes $ \ix0 typ -> do
+        let ix = fromIntegral ix0
+        fromLogical typ $
+          Boxed.mapMaybe (\(tag, row) -> if ix == tag then Just row else Nothing) rows_
+
+      return $
+        Striped.Union tags (Boxed.fromList inners)
+
+    TIMESTAMP -> do
+      rows_  <- note "Take Union" $ traverse takeTimestamp rows
+      let
+        unTS (Orc.Timestamp seconds nanos) = (seconds, nanos)
+
+      return $
+        uncurry Striped.Timestamp $
+          bimap Boxed.convert Boxed.convert $
+          Boxed.unzip $
+          Boxed.map unTS $
+            rows_
 
     DECIMAL -> do
-      Left "Not finished DECIMAL"
+      rows_  <- note "Take List" $ traverse takeDecimal rows
+      let
+        toStripeDecimal (Decimal.Decimal places mantissa) =
+          let (n,p') = normalizePositive (mantissa, 0)
+          in  (fromInteger n, fromInteger $ fromIntegral places - p')
+
+      pure $
+        uncurry Striped.Decimal $
+          bimap Boxed.convert Boxed.convert $
+          Boxed.unzip $
+          Boxed.map toStripeDecimal $
+            rows_
+
+
+normalizePositive :: (Integer, Integer) -> (Integer, Integer)
+normalizePositive (!c, !n) =
+  case divMod c 10 of
+    (c', r)
+      | r  == 0   -> normalizePositive (c', n + 1)
+      | otherwise -> (c, n)

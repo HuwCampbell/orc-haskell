@@ -167,7 +167,7 @@ prop_spec_nanoseconds_roundtrip =
       forAll $
         Gen.word64 (Range.linearFrom 0 0 1000000000)
 
-    tripping x lazyNano (Just . parseNano)
+    tripping x encodeNanoseconds (Just . decodeNanoseconds)
 
 
 tests :: IO Bool

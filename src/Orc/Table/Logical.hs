@@ -23,6 +23,7 @@ module Orc.Table.Logical (
   , takeMap
   , takePartials
   , takeDecimal
+  , takeTimestamp
 ) where
 
 import           Orc.Prelude
@@ -112,6 +113,10 @@ takeLong _        = Nothing
 takeDecimal :: Row -> Maybe Decimal
 takeDecimal (Decimal x) = Just x
 takeDecimal _           = Nothing
+
+takeTimestamp :: Row -> Maybe Orc.Timestamp
+takeTimestamp (Timestamp x) = Just x
+takeTimestamp _             = Nothing
 
 takeDate :: Row -> Maybe Int64
 takeDate (Date (Orc.Day x)) = Just x

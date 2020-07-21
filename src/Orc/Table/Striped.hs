@@ -41,7 +41,7 @@ data Column
   | Integer   !(Storable.Vector Int32)
   | Long      !(Storable.Vector Int64)
 
-  | Decimal   !(Storable.Vector Int128) !(Storable.Vector Int16)
+  | Decimal   !(Storable.Vector Int128) !(Storable.Vector Int8)
   | Date      !(Storable.Vector Int64)
   | Timestamp !(Storable.Vector Int64)  !(Storable.Vector Word64)
 
