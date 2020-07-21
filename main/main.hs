@@ -2,27 +2,48 @@ module Main (
   main
 ) where
 
-import Data.Text (pack)
-import Orc.Serial.Binary.Striped
-import Orc.Serial.Binary.Logical
-import Options.Applicative
-import Control.Monad.Trans.Either.Exit
+import           Control.Monad.Trans.Either.Exit
+import           Data.Text (pack)
+
+import           Orc.Serial.Binary.Striped
+import           Orc.Serial.Binary.Logical
+
+import           Options.Applicative
 
 import qualified Streaming.Prelude as Streaming
 
-parser :: Parser (FilePath, Maybe FilePath)
-parser = (,) <$> strArgument (metavar "ORC_FILE") <*> optional (strArgument (metavar "OUT_ORC_FILE"))
+parser :: Parser Command
+parser =
+  hsubparser $ mconcat [
+    command "json"     (info json    (progDesc "Print and ORC file as JSON rows"))
+  , command "reencode" (info rewrite (progDesc "Re-write an Orc file with this encoder"))
+  ]
+
+
+data Command
+  = Json FilePath
+  | Rewrite FilePath FilePath
+  deriving (Eq, Show)
+
+
+json :: Parser Command
+json = Json <$> strArgument (metavar "ORC_FILE" <> help "Orc file to print as JSON")
+
+
+rewrite :: Parser Command
+rewrite = Rewrite <$> strArgument (metavar "ORC_FILE") <*> strArgument (metavar "OUT_ORC_FILE")
+
 
 main :: IO ()
 main = do
-  (fp, oFop) <- execParser (info (parser <**> helper) idm)
+  cmnd <- customExecParser (prefs showHelpOnEmpty) (info (parser <**> helper) idm)
 
   orDie pack $
-    case oFop of
-      Nothing ->
-        printOrcFile fp
+    case cmnd of
+      Json orcIn ->
+        printOrcFile orcIn
 
-      Just fop ->
-        withOrcStripes fp $
-          putOrcFile fop . Streaming.map snd
+      Rewrite orcIn orcOut ->
+        withOrcStripes orcIn $
+          putOrcFile orcOut . Streaming.map snd
 

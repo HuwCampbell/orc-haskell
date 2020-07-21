@@ -55,6 +55,7 @@ library
                        Orc.X.Vector.Segment
                        Orc.X.Vector.Transpose
                        Orc.X.Vector
+                       Orc.X.Streaming
 
   build-depends:       base                            >= 3          && < 5
                      , ambiata-snapper

@@ -12,8 +12,6 @@ module Orc.X.Vector (
   , xmapMaybe
   , uncons
   , safeHead
-
-  , streamingLength
 ) where
 
 import           Orc.Prelude

@@ -40,9 +40,7 @@ import           Data.Word (Word32)
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
-import qualified Streaming.Internal as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
-import qualified Data.ByteString.Streaming.Internal as ByteStream
 
 import           Orc.Data.Segmented
 import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed, prevIndex)
@@ -57,7 +55,7 @@ import           Orc.Serial.Binary.Internal.OrcNum
 import           Orc.Table.Striped (Column (..))
 import qualified Orc.Table.Striped as Striped
 
-import           Orc.X.Vector
+import           Orc.X.Streaming
 
 import           System.IO as IO
 
@@ -578,7 +576,7 @@ putOrcStream column = do
           Nothing
           (Just "ORC")
 
-  untied $
+  streamingPut $
     Put.putWord8 $
       fromIntegral psLength
 
@@ -802,41 +800,17 @@ putStringColumn strs = do
 stream_ :: (MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
 stream_ p =
     streamingLength . ByteStream.mwrap $ do
-      strict :> a <- ByteStream.toStrict (untied p )
+      strict :> a <- ByteStream.toStrict (streamingPut p )
       blah        <- liftEither $ writeCompressedStream (Just SNAPPY) strict
       return $ ByteStream.toStreamingByteString blah $> a
 {-# INLINABLE stream_ #-}
 
 
 streamUncompressed_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
-streamUncompressed_ = streamingLength .untied
+streamUncompressed_ = streamingLength . streamingPut
 {-# INLINABLE streamUncompressed_ #-}
-
-
-untied :: MonadIO m => PutM a -> ByteStream m a
-untied x =
-  let (a, bldr) = Put.runPutMBuilder x
-  in  ByteStream.toStreamingByteString bldr $> a
-{-# INLINE untied #-}
 
 
 i2w32 :: Int -> Word32
 i2w32 = fromIntegral
 {-# INLINE i2w32 #-}
-
-
-hyloByteStream :: Monad m => (x -> a -> ByteStream m x) -> x -> Streaming.Stream (Of a) m r -> ByteStream m (Of x r)
-hyloByteStream step begin =
-    loop begin
-  where
-    loop x = \case
-      Streaming.Return r ->
-        ByteStream.Empty (x :> r)
-
-      Streaming.Effect m ->
-        ByteStream.mwrap $
-          loop x <$> m
-
-      Streaming.Step (a :> rest) -> do
-        x' <- step x a
-        loop x' rest
