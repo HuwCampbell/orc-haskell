@@ -100,7 +100,7 @@ checkOrcFile file =
 withOrcStripes
   :: MonadIO m
   => FilePath
-  -> ((Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()) -> EitherT String IO r)
+  -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()) -> EitherT String IO r)
   -> EitherT String IO r
 withOrcStripes file action =
   withOrcFile file $ \(handle, postScript, footer) -> do
@@ -111,7 +111,7 @@ withOrcStripes file action =
       typeInfo =
         types footer
 
-    action $
+    action typeInfo $
       Streaming.mapM
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)

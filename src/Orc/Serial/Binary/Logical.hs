@@ -19,6 +19,7 @@ import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
 
+import           Orc.Schema.Types
 import           Orc.Serial.Binary.Striped
 import           Orc.Serial.Json.Logical
 
@@ -39,11 +40,11 @@ import           Orc.Prelude
 withOrcStream
   :: MonadIO m
   => FilePath
-  -> ((Streaming.Stream (Of Logical.Row) (EitherT String m) ()) -> EitherT String IO r)
+  -> (Type -> (Streaming.Stream (Of Logical.Row) (EitherT String m) ()) -> EitherT String IO r)
   -> EitherT String IO r
 withOrcStream fs action =
-  withOrcStripes fs $
-    action .
+  withOrcStripes fs $ \typ ->
+    action typ .
       streamLogical .
         Streaming.map snd
 
@@ -54,7 +55,7 @@ withOrcStream fs action =
 -- do something useful with it.
 printOrcFile :: FilePath -> EitherT String IO ()
 printOrcFile fp = do
-  withOrcStream fp $
+  withOrcStream fp $ \_ ->
     ByteStream.stdout
       . ByteStream.concat
       . Streaming.maps (\(x :> r) -> ppJsonRow x $> r)
