@@ -48,6 +48,8 @@ streamLogical ss =
     Streaming.each . toLogical
 
 
+-- FIXME: This has failure states.
+-- FIXME: This should return an either.
 toLogical :: Striped.Column -> Boxed.Vector Logical.Row
 toLogical =
   go
@@ -62,8 +64,7 @@ toLogical =
           transpose logicals
 
         asFields =
-          Boxed.map (Boxed.zipWith (\(StructField n _) r -> StructField n r) cols) transposed
-
+          Boxed.map (Boxed.zipWith (\s r -> s $> r) cols) transposed
       in
         fmap Logical.Struct asFields
 

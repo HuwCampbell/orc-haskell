@@ -18,7 +18,7 @@ module Orc.Serial.Binary.Striped (
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
-import           Control.Monad.State (MonadState (..), StateT (..), evalStateT, modify')
+import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, modify')
 import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Class (MonadTrans (..))
@@ -258,7 +258,7 @@ withPresence rows act = do
 
       presenceColumn <-
         liftEither $
-          fmap (Storable.take (fromIntegral rows)) $
+          Storable.take (fromIntegral rows) <$>
             decodeBits presenceBytes
 
       let
@@ -356,7 +356,9 @@ decodeColumnPart typs rows = do
   case (typs, encodingKind) of
     (BOOLEAN, _) -> do
       dataBytes <- popStream
-      bits      <- liftEither (decodeBits dataBytes)
+      bits      <- Storable.take (fromIntegral rows) <$>
+                    liftEither (decodeBits dataBytes)
+
       return $ Bool bits
 
     (BYTE, _) -> do
