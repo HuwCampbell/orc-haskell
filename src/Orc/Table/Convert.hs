@@ -97,12 +97,12 @@ toLogical =
       in
         fmap Logical.Bool boxed
 
-    Striped.Bytes x ->
+    Striped.Byte x ->
       let
         boxed =
           Boxed.convert x
       in
-        fmap Logical.Bytes boxed
+        fmap Logical.Byte boxed
 
     Striped.Short x ->
       let
@@ -258,8 +258,8 @@ fromLogical' schema rows =
         traverse takeBool rows
     BYTE ->
       note "Bytes" $
-      Striped.Bytes . Boxed.convert <$>
-        traverse takeBytes rows
+      Striped.Byte . Boxed.convert <$>
+        traverse takeByte rows
     SHORT ->
       note "Short" $
       Striped.Short . Boxed.convert <$>

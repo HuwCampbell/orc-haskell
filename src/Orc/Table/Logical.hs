@@ -10,7 +10,7 @@ module Orc.Table.Logical (
   , takeVarChar
   , takeBinary
   , takeBool
-  , takeBytes
+  , takeByte
   , takeShort
   , takeInteger
   , takeLong
@@ -46,7 +46,7 @@ data Row
 
   -- Primitive Columns
   | Bool      !Bool
-  | Bytes     !Word8
+  | Byte      !Word8
 
   | Short     !Int16
   | Integer   !Int32
@@ -94,9 +94,9 @@ takeBool :: Row -> Maybe Bool
 takeBool (Bool x) = Just x
 takeBool _        = Nothing
 
-takeBytes :: Row -> Maybe Word8
-takeBytes (Bytes x) = Just x
-takeBytes _         = Nothing
+takeByte :: Row -> Maybe Word8
+takeByte (Byte x) = Just x
+takeByte _        = Nothing
 
 takeShort :: Row -> Maybe Int16
 takeShort (Short x) = Just x

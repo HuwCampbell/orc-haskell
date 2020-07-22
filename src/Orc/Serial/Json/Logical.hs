@@ -58,7 +58,7 @@ buildRow = \case
     buildRow
       $ Struct
       $ Boxed.fromList [
-        StructField (StructFieldName "tag") (Bytes i)
+        StructField (StructFieldName "tag") (Byte i)
       , StructField (StructFieldName "value") r
       ]
 
@@ -77,7 +77,7 @@ buildRow = \case
   Bool b ->
     bool_ b
 
-  Bytes b ->
+  Byte b ->
     Builder.word8Dec b
 
   Short b ->

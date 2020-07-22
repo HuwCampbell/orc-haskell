@@ -364,7 +364,7 @@ decodeColumnPart typs rows = do
     (BYTE, _) -> do
       dataBytes <- popStream
       bytes     <- liftEither (decodeBytes dataBytes)
-      return $ Bytes bytes
+      return $ Byte bytes
 
     (SHORT, enc) -> do
       dataBytes <- popStream
@@ -696,7 +696,7 @@ putColumnPart = \case
     return BOOLEAN
 
 
-  Bytes bytes -> do
+  Byte bytes -> do
     _          <- simpleEncoding DIRECT
     (l :> _)   <- stream_ $ putBytes bytes
     _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))

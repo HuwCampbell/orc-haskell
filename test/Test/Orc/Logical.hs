@@ -45,7 +45,7 @@ genLogical = \case
   BOOLEAN ->
     Bool <$> Gen.bool
   BYTE ->
-    Bytes <$> Gen.word8 lmb
+    Byte <$> Gen.word8 lmb
   SHORT ->
     Short <$> Gen.int16 lmb
   INT ->

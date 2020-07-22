@@ -36,7 +36,7 @@ data Column
 
   -- Primitive Columns
   | Bool      !(Storable.Vector Bool)
-  | Bytes     !(Storable.Vector Word8)
+  | Byte      !(Storable.Vector Word8)
 
   | Short     !(Storable.Vector Int16)
   | Integer   !(Storable.Vector Int32)
@@ -81,7 +81,7 @@ length = \case
   Bool x ->
     Right $ Storable.length x
 
-  Bytes x ->
+  Byte x ->
     Right $ Storable.length x
 
   Short x ->
@@ -137,7 +137,7 @@ emptyOf = \case
   BOOLEAN ->
     Bool Storable.empty
   BYTE ->
-    Bytes Storable.empty
+    Byte Storable.empty
   SHORT ->
     Short Storable.empty
   INT ->
@@ -191,8 +191,8 @@ append c0 c1 =
     (Bool x0, Bool x1) ->
       Right $ Bool (x0 <> x1)
 
-    (Bytes x0, Bytes x1) ->
-      Right $ Bytes (x0 <> x1)
+    (Byte x0, Byte x1) ->
+      Right $ Byte (x0 <> x1)
 
     (Short x0, Short x1) ->
       Right $ Short (x0 <> x1)
