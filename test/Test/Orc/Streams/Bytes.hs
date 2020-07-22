@@ -16,8 +16,8 @@ import           Prelude (maxBound)
 import           Orc.Serial.Binary.Internal.Bytes
 
 
-prop_roundTripBytes :: Property
-prop_roundTripBytes =
+prop_roundtrip_bytes :: Property
+prop_roundtrip_bytes =
   withTests 1000 . property $ do
     x <-
       forAll $
@@ -29,8 +29,8 @@ prop_roundTripBytes =
 
 
 
-prop_roundTripBoolBits :: Property
-prop_roundTripBoolBits =
+prop_roundtrip_boolean_bits :: Property
+prop_roundtrip_boolean_bits =
   withTests 1000 . property $ do
     x <-
       forAll $

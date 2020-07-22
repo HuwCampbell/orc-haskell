@@ -93,7 +93,7 @@ prop_logical_tables_round_trip_via_stipes = withTests 1000 . property $ do
   typ       <- forAll genType
   logical   <- forAll $ fromList <$> Gen.list (Range.linear 0 100) (genLogical typ)
 
-  striped   <- evalM      $ evalEither $ Convert.fromLogical typ logical
+  striped   <- evalEither $ Convert.fromLogical typ logical
   recreated <- eval       $ Convert.toLogical striped
 
   logical === recreated

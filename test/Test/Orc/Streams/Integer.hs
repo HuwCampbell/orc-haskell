@@ -20,8 +20,8 @@ import           Prelude (minBound, maxBound)
 import           Orc.Serial.Binary.Internal.Integers
 
 
-prop_roundTripBase128Varint :: Property
-prop_roundTripBase128Varint =
+prop_roundtrip_base128_varint :: Property
+prop_roundtrip_base128_varint =
   withTests 1000 . property $ do
     x <-
       forAll $
@@ -30,8 +30,8 @@ prop_roundTripBase128Varint =
     tripping x (Put.runPut . putBase128Varint) (Get.runGet getBase128Varint)
 
 
-prop_roundTripIntegerRLEv1 :: Property
-prop_roundTripIntegerRLEv1 =
+prop_roundtrip_integer_rle_v1 :: Property
+prop_roundtrip_integer_rle_v1 =
   withTests 1000 . property $ do
     xs <-
       forAll $
@@ -42,8 +42,8 @@ prop_roundTripIntegerRLEv1 =
     tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
 
 
-prop_roundTripIntegerRLEv1_int64 :: Property
-prop_roundTripIntegerRLEv1_int64 =
+prop_roundtrip_integer_rle_v1_int64 :: Property
+prop_roundtrip_integer_rle_v1_int64 =
   withTests 1000 . property $ do
     xs <-
       forAll $
@@ -54,8 +54,8 @@ prop_roundTripIntegerRLEv1_int64 =
     tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
 
 
-prop_spec_repeat_IntegerRLEv1 :: Property
-prop_spec_repeat_IntegerRLEv1 =
+prop_spec_repeat_integer_rle_v1 :: Property
+prop_spec_repeat_integer_rle_v1 =
   withTests 1 . property $ do
     let
       shortRepeatExampleInput =
@@ -71,8 +71,8 @@ prop_spec_repeat_IntegerRLEv1 =
 
 
 
-prop_spec_put_repeat_IntegerRLEv1 :: Property
-prop_spec_put_repeat_IntegerRLEv1 =
+prop_spec_put_repeat_integer_rle_v1 :: Property
+prop_spec_put_repeat_integer_rle_v1 =
   withTests 1 . property $ do
     let
       shortRepeatExampleInput =
@@ -87,8 +87,8 @@ prop_spec_put_repeat_IntegerRLEv1 =
     shortRepeatOutput === shortRepeatExampleInput
 
 
-prop_spec_short_repeat_IntegerRLEv2 :: Property
-prop_spec_short_repeat_IntegerRLEv2 =
+prop_spec_short_repeat_integer_rle_v2 :: Property
+prop_spec_short_repeat_integer_rle_v2 =
   withTests 1 . property $ do
     let
       shortRepeatExampleInput =
@@ -104,8 +104,8 @@ prop_spec_short_repeat_IntegerRLEv2 =
     shortRepeatOutput === Right shortRepeatExpected
 
 
-prop_spec_direct_IntegerRLEv2 :: Property
-prop_spec_direct_IntegerRLEv2 =
+prop_spec_direct_integer_rle_v2 :: Property
+prop_spec_direct_integer_rle_v2 =
   withTests 1 . property $ do
     let
       directExampleInput =
@@ -122,8 +122,8 @@ prop_spec_direct_IntegerRLEv2 =
 
 
 
-prop_spec_patch_IntegerRLEv2 :: Property
-prop_spec_patch_IntegerRLEv2 =
+prop_spec_patch_integer_rle_v2 :: Property
+prop_spec_patch_integer_rle_v2 =
   withTests 1 . property $ do
     let
       patchExampleInput =
@@ -142,8 +142,8 @@ prop_spec_patch_IntegerRLEv2 =
     patchOutput === Right patchExpected
 
 
-prop_spec_delta_IntegerRLEv2 :: Property
-prop_spec_delta_IntegerRLEv2 =
+prop_spec_delta_integer_rle_v2 :: Property
+prop_spec_delta_integer_rle_v2 =
   withTests 1 . property $ do
     let
       deltaExampleInput =
@@ -160,8 +160,8 @@ prop_spec_delta_IntegerRLEv2 =
 
 
 
-prop_spec_nanoseconds_roundtrip :: Property
-prop_spec_nanoseconds_roundtrip =
+prop_roundtrip_nanoseconds :: Property
+prop_roundtrip_nanoseconds =
   property $ do
     x <-
       forAll $
