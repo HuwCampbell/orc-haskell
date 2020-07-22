@@ -13,7 +13,7 @@ module Orc.Table.Convert (
   , streamFromLogical
 ) where
 
-import           Control.Monad.State (runState, put, get)
+import           Control.Monad.State (evalState, put, get)
 import           Control.Monad.Trans.Either (EitherT, hoistEither)
 
 import           Streaming (Of (..))
@@ -189,7 +189,7 @@ toLogical =
 
       in
         fmap Logical.Partial $
-          fst $ flip runState 0 $
+          flip evalState 0 $
             Boxed.forM boxed $ \here ->
               if here then do
                 current <- get
@@ -210,7 +210,7 @@ toLogical =
 
       in
         fmap (uncurry Logical.Union) $
-          fst $ flip runState indicies $
+          flip evalState indicies $
             Boxed.forM (Boxed.convert tags) $ \tag -> do
               current <- get
               let
@@ -308,8 +308,13 @@ fromLogical' schema rows =
     STRUCT fts -> do
       rows_  <- note "Take Struct" $ traverse takeStruct rows
       let
+        vfts  = Boxed.fromList fts
         cols0 = transpose rows_
-        colsX = Boxed.zip (Boxed.fromList $ fts) cols0
+        colsX =
+          if null cols0 then
+            Boxed.map (\ft -> (ft, Boxed.empty)) vfts
+          else
+            Boxed.zip vfts cols0
 
       cols   <- traverse (\(ft, c) -> traverse (flip fromLogical c) ft) colsX
       return $

@@ -12,7 +12,6 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import qualified Hedgehog.Corpus as Corpus
 
-import           Control.Monad.IO.Class
 import           Control.Monad.Morph
 import           Control.Monad.Trans.Resource (runResourceT)
 
@@ -29,7 +28,7 @@ import qualified Orc.Table.Convert as Convert
 
 import qualified Orc.Serial.Binary.Logical as Binary
 
-import           Test.Orc.Type (genType)
+import           Test.Orc.Type (genType, genCompressionKind)
 
 import           Streaming (Of (..))
 import qualified Streaming.Prelude as Streaming
@@ -102,20 +101,22 @@ prop_logical_tables_round_trip_via_stipes = withTests 1000 . property $ do
 
 prop_logical_tables_roundtrip_via_files :: Property
 prop_logical_tables_roundtrip_via_files = withTests 1000 . property $ do
-  typ       <- forAll $ Gen.prune genType
-  logical   <- forAll $ Gen.prune $ Gen.list (Range.linear 1 10) (genLogical typ)
+  typ        <- forAll genType
+  cmpKind    <- forAll genCompressionKind
+  stripeSize <- forAll $ Gen.int  (Range.linear 1 10)
+  logical    <- forAll $ Gen.list (Range.linear 1 50) (genLogical typ)
 
   hoist runResourceT $ test $ do
     (_, dir)  <- Temp.createTempDirectory Nothing "prop_dir"
-    let tfile  = dir </> "test.orc"
+    let tempFile  = dir </> "test.orc"
 
-    evalExceptT . hoist (liftIO) $
-      Binary.putOrcStream typ Nothing 100 tfile $
+    evalExceptT . hoist evalIO $
+      Binary.putOrcStream typ cmpKind stripeSize tempFile $
         Streaming.each logical
 
     recreated :> () <-
-      evalExceptT . hoist (liftIO) $
-        Binary.withOrcStream tfile $ \_ ->
+      evalExceptT . hoist evalIO $
+        Binary.withOrcStream tempFile $ \_ ->
           Streaming.toList
 
     logical === recreated
