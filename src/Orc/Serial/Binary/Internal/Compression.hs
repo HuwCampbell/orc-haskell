@@ -54,7 +54,7 @@ readCompressedStream = \case
   Just LZO ->
     readLzoParts
   Just LZ4 ->
-    const (Left "Unsupported Compression Type LZ4")
+    const (Left "Unsupported Compression Kind LZ4")
 
 
 overLazy :: (Lazy.ByteString -> Lazy.ByteString) -> ByteString -> ByteString
@@ -140,8 +140,8 @@ writeCompressedStream = \case
     Right . writeZstdParts
   Just LZO ->
     Right . writeLzoParts
-  Just _ ->
-    const (Left "Unsupported Compression Type")
+  Just LZ4 ->
+    const (Left "Unsupported Compression Kind LZ4")
 
   where
     trivial =

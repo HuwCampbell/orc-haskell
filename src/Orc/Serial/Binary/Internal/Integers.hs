@@ -490,6 +490,8 @@ getDelta = do
     scanVec =
       if repeats == 1 then
         Storable.empty
+      else if width == 0 then
+        Storable.replicate (fromIntegral deltaRepeats + 1) deltaBase
       else
         Storable.singleton deltaBase <> deltas
 

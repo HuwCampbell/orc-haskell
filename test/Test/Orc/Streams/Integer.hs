@@ -160,6 +160,25 @@ prop_spec_delta_integer_rle_v2 =
 
 
 
+prop_spec_delta_integer_rle_v2_zero_not_zero :: Property
+prop_spec_delta_integer_rle_v2_zero_not_zero =
+  withTests 1 . property $ do
+    let
+      deltaExampleInput =
+        Strict.pack [0xc0, 0x09, 0x02, 0x02]
+
+      deltaExpected :: Storable.Vector Word64
+      deltaExpected =
+        Storable.fromList [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+      deltaOutput =
+        Get.runGet getIntegerRLEv2 deltaExampleInput
+
+    deltaOutput === Right deltaExpected
+
+
+
+
 prop_roundtrip_nanoseconds :: Property
 prop_roundtrip_nanoseconds =
   property $ do
