@@ -83,12 +83,14 @@ withOrcFile file action =
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)
 
+
 {-# SPECIALIZE
   withOrcFile
     :: FilePath
     -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT String IO) ())
     -> EitherT String IO r)
     -> EitherT String IO r #-}
+
 
 readStripe
   :: MonadTransIO t

@@ -4,7 +4,9 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{- | Streaming of ORC files as 'Logical.Row'.
 
+-}
 module Orc.Serial.Binary.Logical (
     withOrcFile
   , putOrcFile
@@ -32,16 +34,22 @@ import           System.IO as IO
 
 import           Orc.Prelude
 
--- | Stream the values as a logical rows.
+-- | Open an ORC file and stream its values values as logical rows.
 --
---   This is the most useful way to read an ORC file,
---   but entails a pivot of all the values. If speed is
---   key, one may wish to use  withOrcStripes and do a
---   predicate pushdown first.
+--   This is the most useful way to read an ORC file, and entails streaming
+--   each row individually. If speed is key, one may wish to use the function
+--   'Striped.withOrcFile' from "Orc.Serial.Binary.Striped" and do a predicate
+--   pushdown first.
+--
+--   This function is lifted to a constrained 'MonadTransControl' type,
+--   for IO and error reporting, which is further specialized to
+--   @EitherT String IO@.
 withOrcFile
   :: MonadTransIO t
   => FilePath
+  -- ^ The ORC file to open
   -> (Type -> (Streaming.Stream (Of Logical.Row) (t IO) ()) -> t IO r)
+  -- ^ How to consume the stream of values as a continuation
   -> t IO r
 withOrcFile fs action =
   Striped.withOrcFile fs $ \typ ->
@@ -59,8 +67,10 @@ withOrcFile fs action =
 
 -- | Simple pretty printer of ORC to JSON.
 --
--- Serves a a demonstration of how to grab an ORC file and
--- do something useful with it.
+--   Serves a a demonstration of how to grab an ORC file and
+--   do something useful with it, as well as a way to easily
+--   pass an ORC file into @jq@ or a similar tool for ad-hoc
+--   processing.
 printOrcFile :: FilePath -> EitherT String IO ()
 printOrcFile fp = do
   withOrcFile fp $ \_ ->
@@ -70,13 +80,23 @@ printOrcFile fp = do
 
 
 
+-- | Write a stream of values as an ORC file.
+--
+--   This function is lifted to a constrained 'MonadTransControl' type,
+--   for IO and error reporting, which is further specialized to
+--   @EitherT String IO@.
 putOrcFile
   :: MonadTransIO t
   => Type
+  -- ^ The types of the 'Logical.Row'
   -> Maybe CompressionKind
+  -- ^ An optional compression standard to use
   -> Int
+  -- ^ The number of rows in each stripe
   -> FilePath
+  -- ^ The filepath to write to
   -> Streaming.Stream (Of Logical.Row) (t IO) ()
+  -- ^ The stream of 'Logical.Row' to write
   -> t IO ()
 putOrcFile typ mCompression chunkSize fp =
   Striped.putOrcFile (Just typ) mCompression fp .

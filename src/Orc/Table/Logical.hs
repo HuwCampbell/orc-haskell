@@ -5,6 +5,7 @@
 module Orc.Table.Logical (
     Row (..)
 
+  -- * Projection functions
   , takeString
   , takeChar
   , takeVarChar
