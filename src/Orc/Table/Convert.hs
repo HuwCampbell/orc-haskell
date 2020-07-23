@@ -238,10 +238,10 @@ fromLogical schema rows = do
     partials = fmap takePartials rows
   ms       <- fromLogical' schema (Boxed.fromList $ catMaybes' $ Boxed.toList partials)
   let
-    ps = fmap (isJust') partials
+    ps = fmap isJust' partials
 
   return $
-    if (Boxed.and ps) then
+    if Boxed.and ps then
       ms
     else
       Striped.Partial (Storable.convert ps) ms
