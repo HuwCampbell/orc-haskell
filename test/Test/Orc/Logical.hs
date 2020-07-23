@@ -40,16 +40,16 @@ lmb :: (Integral a, Bounded a) => Range a
 lmb = Range.linearFrom 0 minBound maxBound
 
 
-genNullable :: Type -> Gen Row
-genNullable typ =
+genLogical :: Type -> Gen Row
+genLogical typ =
   Gen.frequency [
     (1, pure Null)
-  , (9, genLogical typ)
+  , (9, genLogical' typ)
   ]
 
 
-genLogical :: Type -> Gen Row
-genLogical = \case
+genLogical' :: Type -> Gen Row
+genLogical' = \case
   BOOLEAN ->
     Bool <$> Gen.bool
   BYTE ->
@@ -80,14 +80,14 @@ genLogical = \case
   CHAR ->
     Char <$> Gen.element (Corpus.nhl)
   LIST lt ->
-    List . fromList <$> Gen.list (Range.linear 1 10) (genNullable lt)
+    List . fromList <$> Gen.list (Range.linear 1 10) (genLogical lt)
   MAP kt vt ->
-    Map . fromList <$> Gen.list (Range.linear 1 10) ((,) <$> genNullable kt <*> genNullable vt)
+    Map . fromList <$> Gen.list (Range.linear 1 10) ((,) <$> genLogical kt <*> genLogical vt)
   UNION uts -> do
     n <- Gen.integral $ Range.constant 0 (List.length uts - 1)
-    Union (fromIntegral n) <$> genNullable (uts List.!! n)
+    Union (fromIntegral n) <$> genLogical (uts List.!! n)
   STRUCT sts ->
-    Struct . fromList <$> traverse (traverse genNullable) sts
+    Struct . fromList <$> traverse (traverse genLogical) sts
 
 
 
@@ -99,8 +99,7 @@ genLogical = \case
 prop_logical_tables_round_trip_via_stipes :: Property
 prop_logical_tables_round_trip_via_stipes = withTests 1000 . property $ do
   typ       <- forAll genType
-  logical   <- forAll $ fromList <$> Gen.list (Range.linear 0 100) (genNullable typ)
-
+  logical   <- forAll $ fromList <$> Gen.list (Range.linear 0 100) (genLogical typ)
   striped   <- evalEither $ Convert.fromLogical typ logical
   recreated <- eval       $ Convert.toLogical striped
 
@@ -112,7 +111,7 @@ prop_logical_tables_roundtrip_via_files = withTests 1000 . property $ do
   typ        <- forAll genType
   cmpKind    <- forAll genCompressionKind
   stripeSize <- forAll $ Gen.int  (Range.linear 1 10)
-  logical    <- forAll $ Gen.list (Range.linear 1 50) (genNullable typ)
+  logical    <- forAll $ Gen.list (Range.linear 0 100) (genLogical typ)
 
   hoist runResourceT $ test $ do
     (_, dir)  <- Temp.createTempDirectory Nothing "prop_dir"
