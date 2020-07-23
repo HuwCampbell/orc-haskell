@@ -18,8 +18,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
 import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, modify')
 import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
+import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Class (MonadTrans (..))
-import           Control.Monad.Trans.Either (EitherT, newEitherT)
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
@@ -48,6 +48,7 @@ import           Orc.Serial.Binary.Internal.Compression
 import           Orc.Serial.Binary.Internal.Integers
 import           Orc.Serial.Binary.Internal.OrcNum
 
+import           Orc.Serial.Binary.Base (MonadTransIO)
 import qualified Orc.Serial.Binary.Base as Base
 
 import           Orc.Table.Striped (Column (..))
@@ -63,10 +64,10 @@ type ByteStream = ByteStream.ByteString
 
 
 withOrcFile
-  :: MonadIO m
+  :: MonadTransIO t
   => FilePath
-  -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()) -> EitherT String IO r)
-  -> EitherT String IO r
+  -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (t IO) ()) -> t IO r)
+  -> t IO r
 withOrcFile file action =
   Base.withOrcFile file $ \(handle, postScript, footer) -> do
     let
@@ -82,7 +83,13 @@ withOrcFile file action =
         (Streaming.each stripeInfos)
 
 
-readStripe :: MonadIO m => Type -> Maybe CompressionKind -> Handle -> StripeInformation -> EitherT String m (StripeInformation, Column)
+readStripe
+  :: MonadTransIO t
+  => Type
+  -> Maybe CompressionKind
+  -> Handle
+  -> StripeInformation
+  -> t IO (StripeInformation, Column)
 readStripe typeInfo mCompressionInfo handle stripeInfo = do
 
   --
@@ -131,7 +138,7 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     hSeek handle RelativeSeek (fromIntegral rdLength)
 
   stripeFooterData <-
-    newEitherT $ readCompressedStream mCompressionInfo <$> liftIO (ByteString.hGet handle $ fromIntegral rsLength)
+    liftEither . readCompressedStream mCompressionInfo =<< liftIO (ByteString.hGet handle $ fromIntegral rsLength)
 
   stripeFooter <-
     liftEither $
@@ -157,15 +164,25 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
   return (stripeInfo, column)
 
 
-decodeTable :: MonadIO m => Word64 -> Type -> Maybe CompressionKind -> [Orc.ColumnEncoding] -> [Orc.Stream] -> ByteStream m () -> EitherT String m Column
+decodeTable
+  :: MonadTransIO t
+  => Word64
+  -> Type
+  -> Maybe CompressionKind
+  -> [Orc.ColumnEncoding]
+  -> [Orc.Stream]
+  -> ByteStream IO ()
+  -> t IO Column
 decodeTable rows typs mCompression encodings orcStreams dataBytes =
   evalStateT (runReaderT (decodeColumn typs rows) mCompression) (makeIndexed encodings, orcStreams, dataBytes)
 
 
-type OrcDecode m = ReaderT (Maybe CompressionKind) (StateT (Indexed Orc.ColumnEncoding, [Orc.Stream], ByteStream m ()) (EitherT String m))
+type OrcDecode t m = ReaderT (Maybe CompressionKind) (StateT (Indexed Orc.ColumnEncoding, [Orc.Stream], ByteStream m ()) (t m))
 
 
-withPresence :: Monad m => Word64 -> (Word64 -> OrcDecode m Column) -> OrcDecode m Column
+withPresence
+  :: MonadTransIO t
+  => Word64 -> (Word64 -> OrcDecode t IO Column) -> OrcDecode t IO Column
 withPresence rows act = do
   mPresenceBytes <- popOptionalStream SK_PRESENT
   case mPresenceBytes of
@@ -186,7 +203,7 @@ withPresence rows act = do
       act rows
 
 
-popOptionalStream :: Monad m => StreamKind -> OrcDecode m (Maybe ByteString)
+popOptionalStream :: MonadTransIO t => StreamKind -> OrcDecode t IO (Maybe ByteString)
 popOptionalStream sk = do
   (ix, streams0, _bytes) <- get
   case streams0 of
@@ -196,7 +213,7 @@ popOptionalStream sk = do
       return Nothing
 
 
-popStream :: Monad m => OrcDecode m ByteString
+popStream :: MonadTransIO t => OrcDecode t IO ByteString
 popStream = do
   compressionInfo <-
     ask
@@ -229,12 +246,12 @@ popStream = do
         "No streams remaining trying to pop column: " <> show (currentIndex ix)
 
 
-incrementColumn :: Monad m => OrcDecode m ()
+incrementColumn :: Monad (t m) => OrcDecode t m ()
 incrementColumn =
   modify' $ \(ix, a, b) -> (nextIndex ix, a, b)
 
 
-decrementColumn :: Monad m => OrcDecode m ()
+decrementColumn :: Monad (t m) => OrcDecode t m ()
 decrementColumn =
   modify' $ \(ix, a, b) -> (prevIndex ix, a, b)
 
@@ -243,12 +260,12 @@ decrementColumn =
 --   such as a Struct, Map or List.
 --   We need to pop out again, as the wrapping decodeColumn
 --   will increment the column when complete.
-nestedColumn :: Monad m => OrcDecode m a -> OrcDecode m a
+nestedColumn :: Monad (t m) => OrcDecode t m a -> OrcDecode t m a
 nestedColumn f =
   incrementColumn *> f <* decrementColumn
 
 
-currentEncoding :: Monad m => OrcDecode m (Orc.ColumnEncoding)
+currentEncoding :: (MonadError String (t m), Monad (t m)) => OrcDecode t m (Orc.ColumnEncoding)
 currentEncoding = do
   (ix, _, _) <- get
   maybe
@@ -260,7 +277,7 @@ currentEncoding = do
 -- | Read a Column including if it's nullable.
 --
 --   After we're done, increment the column index.
-decodeColumn :: Monad m => Type -> Word64 -> OrcDecode m Column
+decodeColumn :: MonadTransIO t => Type -> Word64 -> OrcDecode t IO Column
 decodeColumn typs rows =
   withPresence rows (decodeColumnPart typs) <* incrementColumn
 
@@ -268,7 +285,7 @@ decodeColumn typs rows =
 -- | Read a Column
 --
 --   The present column component has already been handled.
-decodeColumnPart :: Monad m => Type -> Word64 -> OrcDecode m Column
+decodeColumnPart :: (MonadError String (t IO), MonadIO (t IO), MonadTransControl t) => Type -> Word64 -> OrcDecode t IO Column
 decodeColumnPart typs rows = do
   currentEncoding' <-
      currentEncoding
@@ -391,7 +408,7 @@ decodeColumnPart typs rows = do
           <*> decodeColumn valTyp nestedRows
 
 
-decodeString :: Monad m => Orc.ColumnEncodingKind -> OrcDecode m (Boxed.Vector ByteString)
+decodeString :: MonadTransIO t => Orc.ColumnEncodingKind -> OrcDecode t IO (Boxed.Vector ByteString)
 decodeString = \case
   DIRECT ->
     decodeStringDirect decodeIntegerRLEv1
@@ -421,7 +438,7 @@ decodeIntegerRLEversion = \case
     decodeIntegerRLEv2
 
 
-decodeStringDirect :: Monad m => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode m (Boxed.Vector ByteString)
+decodeStringDirect :: MonadTransIO t => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode t IO (Boxed.Vector ByteString)
 decodeStringDirect decodeIntegerFunc = do
   dataBytes   <- popStream
   lengthBytes <- popStream
@@ -433,7 +450,7 @@ decodeStringDirect decodeIntegerFunc = do
       splitByteString lengths dataBytes
 
 
-decodeStringDictionary :: Monad m => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode m (Boxed.Vector ByteString)
+decodeStringDictionary :: MonadTransIO t => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode t IO (Boxed.Vector ByteString)
 decodeStringDictionary decodeIntegerFunc = do
   dataBytes       <- popStream
   -- Specification appears to be incorrect here
@@ -462,7 +479,7 @@ decodeStringDictionary decodeIntegerFunc = do
     discovered
 
 
-decodeStruct :: Monad m => Word64 -> [StructField Type] -> OrcDecode m Column
+decodeStruct :: MonadTransIO t => Word64 -> [StructField Type] -> OrcDecode t IO Column
 decodeStruct rows fields =
   fmap (Struct . Boxed.fromList) $
     for fields $
@@ -491,20 +508,22 @@ liftMaybe =
 -- * -------------------
 
 
-
-putOrcFile :: Maybe Type -> Maybe CompressionKind -> FilePath -> Streaming.Stream (Of Column) (EitherT String IO) () -> EitherT String IO ()
+putOrcFile
+  :: MonadTransIO t
+  => Maybe Type
+  -> Maybe CompressionKind
+  -> FilePath
+  -> Streaming.Stream (Of Column) (t IO) ()
+  -> t IO ()
 putOrcFile expectedType mCmprssn file column =
-  Base.withFileLifted file WriteMode $ \handle -> do
+  Base.withBinaryFileLifted file WriteMode $ \handle -> do
     runReaderT ? mCmprssn $
       ByteStream.toHandle handle $
         putOrcStream expectedType $
           Streaming.hoist lift column
 
 
-type OrcEncode m = ReaderT (Maybe CompressionKind) (EitherT String m)
-
-
-putOrcStream :: (MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) (OrcEncode m) () -> ByteStream (OrcEncode m) ()
+putOrcStream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) m () -> ByteStream m ()
 putOrcStream expectedType tableStream = do
   "ORC"
 

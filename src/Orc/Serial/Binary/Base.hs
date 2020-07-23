@@ -4,20 +4,22 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE ConstraintKinds     #-}
 
 module Orc.Serial.Binary.Base (
     withOrcFile
   , checkOrcFile
 
   -- * Internal
-  , withFileLifted
+  , withBinaryFileLifted
   , checkMagic
+
+  , MonadTransIO
 ) where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Except (liftEither)
+import           Control.Monad.Except (MonadError, liftEither)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
-import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
 
 import qualified Data.Serialize.Get as Get
 
@@ -34,27 +36,34 @@ import           System.IO as IO
 import           Orc.Prelude
 
 
-withFileLifted
-  :: (Monad (t IO), MonadTransControl t)
+type MonadTransIO t = (MonadError String (t IO), MonadIO (t IO), MonadTransControl t)
+
+
+withBinaryFileLifted
+  :: (MonadIO (t IO), MonadTransControl t)
   => FilePath
   -> IOMode
   -> (Handle -> t IO r)
   -> t IO r
-withFileLifted file mode action =
+withBinaryFileLifted file mode action =
   liftWith (\run -> withBinaryFile file mode (run . action)) >>=
     restoreT . return
 
 
-withOrcFile :: FilePath -> ((Handle, PostScript, Footer) -> EitherT String IO r) -> EitherT String IO r
+withOrcFile
+  :: MonadTransIO t
+  => FilePath -> ((Handle, PostScript, Footer) -> t IO r) -> t IO r
 withOrcFile file action =
-  withFileLifted file ReadMode $ \handle -> do
+  withBinaryFileLifted file ReadMode $ \handle -> do
     (postScript, footer) <-
       checkMagic handle
 
     action (handle, postScript, footer)
 
 
-checkOrcFile :: FilePath -> EitherT String IO ([StripeInformation], Type, Maybe CompressionKind)
+checkOrcFile
+  :: MonadTransIO t
+  => FilePath -> t IO ([StripeInformation], Type, Maybe CompressionKind)
 checkOrcFile file =
   withOrcFile file $ \(_, postScript, footer) -> do
     let
@@ -70,13 +79,13 @@ checkOrcFile file =
 
 -- | Checks that the magic values are present in the file
 --   (i.e. makes sure that it is actually an ORC file)
-checkMagic :: MonadIO m => Handle -> EitherT String m (PostScript, Footer)
+checkMagic :: MonadTransIO t => Handle -> t IO (PostScript, Footer)
 checkMagic handle = do
   liftIO  $ hSeek handle AbsoluteSeek 0
   header <- liftIO (ByteString.hGet handle 3)
 
   unless (header == "ORC") $
-    left "Invalid header - probably not an ORC file."
+    liftEither (Left "Invalid header - probably not an ORC file.")
 
   -- Seek to the last byte of the file to get the
   -- size of the postscript.
@@ -84,13 +93,13 @@ checkMagic handle = do
     hSeek handle SeekFromEnd (-1)
 
   psLength <-
-    newEitherT $ Get.runGet Get.getWord8 <$> liftIO (ByteString.hGet handle 1)
+    liftEither . Get.runGet Get.getWord8 =<< liftIO (ByteString.hGet handle 1)
 
   liftIO $
     hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength)
 
   postScript <-
-    newEitherT $ readPostScript <$> liftIO (ByteString.hGet handle $ fromIntegral psLength)
+    liftEither . readPostScript =<< liftIO (ByteString.hGet handle $ fromIntegral psLength)
 
   let
     compressionInfo =
@@ -103,7 +112,7 @@ checkMagic handle = do
     hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength + fromIntegral footerLen)
 
   footerData <-
-    newEitherT $ readCompressedStream compressionInfo <$> liftIO (ByteString.hGet handle $ fromIntegral footerLen)
+    liftEither . readCompressedStream compressionInfo =<< liftIO (ByteString.hGet handle $ fromIntegral footerLen)
 
   footer <-
     liftEither $ readFooter footerData

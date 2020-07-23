@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
+{-# LANGUAGE FlexibleContexts    #-}
 
 module Orc.Table.Convert (
     streamLogical
@@ -15,7 +16,8 @@ module Orc.Table.Convert (
 ) where
 
 import           Control.Monad.Trans.Class (lift)
-import           Control.Monad.Trans.Either (EitherT, runEitherT, newEitherT, hoistEither)
+import           Control.Monad.Trans.Either (runEitherT, newEitherT, hoistEither)
+import           Control.Monad.Except (MonadError, liftEither)
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
@@ -173,13 +175,13 @@ eachStorable =
 
 
 streamFromLogical
-  :: Monad m
+  :: (Monad m, MonadError String m)
   => Int
   -> Type
-  -> Streaming.Stream (Of Logical.Row) (EitherT String m) x
-  -> Streaming.Stream (Of Striped.Column) (EitherT String m) x
+  -> Streaming.Stream (Of Logical.Row) m x
+  -> Streaming.Stream (Of Striped.Column) m x
 streamFromLogical chunkSize schema =
-  Streaming.mapM (hoistEither . fromLogical schema . Boxed.fromList) .
+  Streaming.mapM (liftEither . fromLogical schema . Boxed.fromList) .
     Streaming.mapped (Streaming.toList) .
       Streaming.chunksOf chunkSize
 

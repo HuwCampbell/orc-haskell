@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE FlexibleContexts    #-}
 
 module Orc.Serial.Binary.Logical (
     withOrcFile
@@ -10,7 +11,6 @@ module Orc.Serial.Binary.Logical (
   , printOrcFile
 ) where
 
-import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Either (EitherT)
 
 import           Data.String (String)
@@ -21,6 +21,7 @@ import qualified Streaming.Prelude as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
 
 import           Orc.Schema.Types
+import           Orc.Serial.Binary.Base (MonadTransIO)
 import qualified Orc.Serial.Binary.Striped as Striped
 import           Orc.Serial.Json.Logical
 
@@ -31,7 +32,6 @@ import           System.IO as IO
 
 import           Orc.Prelude
 
-
 -- | Stream the values as a logical rows.
 --
 --   This is the most useful way to read an ORC file,
@@ -39,10 +39,10 @@ import           Orc.Prelude
 --   key, one may wish to use  withOrcStripes and do a
 --   predicate pushdown first.
 withOrcFile
-  :: MonadIO m
+  :: MonadTransIO t
   => FilePath
-  -> (Type -> (Streaming.Stream (Of Logical.Row) (EitherT String m) ()) -> EitherT String IO r)
-  -> EitherT String IO r
+  -> (Type -> (Streaming.Stream (Of Logical.Row) (t IO) ()) -> t IO r)
+  -> t IO r
 withOrcFile fs action =
   Striped.withOrcFile fs $ \typ ->
     action typ .
@@ -63,7 +63,14 @@ printOrcFile fp = do
 
 
 
-putOrcFile :: Type -> Maybe CompressionKind -> Int -> FilePath -> Streaming.Stream (Of Logical.Row) (EitherT String IO) () -> EitherT String IO ()
+putOrcFile
+  :: MonadTransIO t
+  => Type
+  -> Maybe CompressionKind
+  -> Int
+  -> FilePath
+  -> Streaming.Stream (Of Logical.Row) (t IO) ()
+  -> t IO ()
 putOrcFile typ mCompression chunkSize fp =
   Striped.putOrcFile (Just typ) mCompression fp .
     streamFromLogical chunkSize typ
