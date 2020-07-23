@@ -60,6 +60,7 @@ data Column
   deriving (Eq, Show)
 
 
+
 length :: Column -> Either String Int
 length = \case
   Struct cols ->

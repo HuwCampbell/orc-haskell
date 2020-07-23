@@ -806,11 +806,11 @@ putStringColumn strs = do
 
 stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
 stream_ p =
-    streamingLength . ByteStream.mwrap $ do
-      cmprssn     <- ask
-      strict :> a <- ByteStream.toStrict (streamingPut p )
-      blah        <- liftEither $ writeCompressedStream cmprssn strict
-      return $ ByteStream.toStreamingByteString blah $> a
+  streamingLength . ByteStream.mwrap $ do
+    cmprssn     <- ask
+    strict :> a <- ByteStream.toStrict (streamingPut p )
+    blah        <- liftEither $ writeCompressedStream cmprssn strict
+    return $ ByteStream.toStreamingByteString blah $> a
 {-# INLINABLE stream_ #-}
 
 

@@ -48,6 +48,7 @@ import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
 import           Data.Word (Word8, Word16, Word32)
+import           Data.WideWord (Int128, Word128)
 import           Data.String (String)
 import qualified Data.List as List
 
@@ -106,7 +107,6 @@ putFloat64 vecs =
   Storable.forM_ vecs IEEE754.putFloat64le
 
 
-{-# INLINE getBase128Varint #-}
 getBase128Varint :: forall w. OrcNum w => Get w
 getBase128Varint =
   let
@@ -129,8 +129,17 @@ getBase128Varint =
   in
     go 0 0
 
+{-# SPECIALIZE getBase128Varint :: Get Int8 #-}
+{-# SPECIALIZE getBase128Varint :: Get Int16 #-}
+{-# SPECIALIZE getBase128Varint :: Get Int32 #-}
+{-# SPECIALIZE getBase128Varint :: Get Int64 #-}
+{-# SPECIALIZE getBase128Varint :: Get Int128 #-}
+{-# SPECIALIZE getBase128Varint :: Get Word8 #-}
+{-# SPECIALIZE getBase128Varint :: Get Word16 #-}
+{-# SPECIALIZE getBase128Varint :: Get Word32 #-}
+{-# SPECIALIZE getBase128Varint :: Get Word64 #-}
+{-# SPECIALIZE getBase128Varint :: Get Word128 #-}
 
-{-# INLINE putBase128Varint #-}
 putBase128Varint :: forall w. OrcNum w => Putter w
 putBase128Varint =
   let
@@ -151,6 +160,17 @@ putBase128Varint =
         Put.putWord8 (masked .|. b10000000) >> go remainder
   in
     go . zigZag
+
+{-# SPECIALIZE putBase128Varint :: Putter Int8 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Int16 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Int32 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Int64 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Int128 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Word8 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Word16 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Word32 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Word64 #-}
+{-# SPECIALIZE putBase128Varint :: Putter Word128 #-}
 
 
 {-# INLINE decodeIntegerRLEv1 #-}
