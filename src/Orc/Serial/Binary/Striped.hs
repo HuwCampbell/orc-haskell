@@ -167,13 +167,9 @@ type OrcDecode m = ReaderT (Maybe CompressionKind) (StateT (Indexed Orc.ColumnEn
 
 withPresence :: Monad m => Word64 -> (Word64 -> OrcDecode m Column) -> OrcDecode m Column
 withPresence rows act = do
-  (ix, streams0, _bytes) <- get
-  case streams0 of
-    s:_ | streamColumn s == Just (currentIndex ix) && streamKind s == Just SK_PRESENT -> do
-
-      presenceBytes <-
-        popStream
-
+  mPresenceBytes <- popOptionalStream SK_PRESENT
+  case mPresenceBytes of
+    Just presenceBytes -> do
       presenceColumn <-
         liftEither $
           Storable.take (fromIntegral rows) <$>
@@ -186,8 +182,18 @@ withPresence rows act = do
 
       Partial presenceColumn <$> act innerRows
 
-    _else ->
+    Nothing ->
       act rows
+
+
+popOptionalStream :: Monad m => StreamKind -> OrcDecode m (Maybe ByteString)
+popOptionalStream sk = do
+  (ix, streams0, _bytes) <- get
+  case streams0 of
+    s:_ | streamColumn s == Just (currentIndex ix) && streamKind s == Just sk -> do
+      Just <$> popStream
+    _else ->
+      return Nothing
 
 
 popStream :: Monad m => OrcDecode m ByteString
@@ -251,7 +257,7 @@ currentEncoding = do
     (currentValue ix)
 
 
--- | Read a Column including if its nullable.
+-- | Read a Column including if it's nullable.
 --
 --   After we're done, increment the column index.
 decodeColumn :: Monad m => Type -> Word64 -> OrcDecode m Column
@@ -434,19 +440,19 @@ decodeStringDictionary decodeIntegerFunc = do
   -- Length bytes comes before dictionary bytes;
   -- and, despite these being mandatory in the spec,
   -- there are files which do not have these streams.
-  lengthBytes     <- popStream <|> pure ByteString.empty
-  dictionaryBytes <- popStream <|> pure ByteString.empty
+  mLengthBytes     <- popOptionalStream SK_LENGTH
+  mDictionaryBytes <- popOptionalStream SK_DICTIONARY_DATA
 
-  selections :: Storable.Vector Word64 <-
+  selections <-
     liftEither (decodeIntegerFunc dataBytes)
 
-  lengths :: Storable.Vector Word64 <-
-    liftEither (decodeIntegerFunc lengthBytes)
+  lengths <-
+    liftEither (decodeIntegerFunc (fromMaybe ByteString.empty mLengthBytes))
 
   let
     dictionary =
       Boxed.convert . bytesOfSegmented $
-        splitByteString lengths dictionaryBytes
+        splitByteString lengths (fromMaybe ByteString.empty mDictionaryBytes)
 
     discovered =
       Boxed.map (\i -> dictionary Boxed.! (fromIntegral i)) $
