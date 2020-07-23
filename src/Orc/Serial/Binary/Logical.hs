@@ -49,6 +49,13 @@ withOrcFile fs action =
       streamLogical .
         Streaming.map snd
 
+{-# SPECIALIZE
+  withOrcFile
+    :: FilePath
+    -> (Type -> (Streaming.Stream (Of Logical.Row) (EitherT String IO) ())
+    -> EitherT String IO r)
+    -> EitherT String IO r #-}
+
 
 -- | Simple pretty printer of ORC to JSON.
 --
@@ -74,3 +81,12 @@ putOrcFile
 putOrcFile typ mCompression chunkSize fp =
   Striped.putOrcFile (Just typ) mCompression fp .
     streamFromLogical chunkSize typ
+
+{-# SPECIALIZE
+  putOrcFile
+    :: Type
+    -> Maybe CompressionKind
+    -> Int
+    -> FilePath
+    -> Streaming.Stream (Of Logical.Row) (EitherT String IO) ()
+    -> EitherT String IO () #-}

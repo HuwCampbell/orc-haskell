@@ -20,6 +20,7 @@ import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalS
 import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Class (MonadTrans (..))
+import           Control.Monad.Trans.Either (EitherT)
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
@@ -82,6 +83,12 @@ withOrcFile file action =
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)
 
+{-# SPECIALIZE
+  withOrcFile
+    :: FilePath
+    -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT String IO) ())
+    -> EitherT String IO r)
+    -> EitherT String IO r #-}
 
 readStripe
   :: MonadTransIO t
@@ -521,6 +528,14 @@ putOrcFile expectedType mCmprssn file column =
       ByteStream.toHandle handle $
         putOrcStream expectedType $
           Streaming.hoist lift column
+
+{-# SPECIALIZE
+  putOrcFile
+    :: Maybe Type
+    -> Maybe CompressionKind
+    -> FilePath
+    -> Streaming.Stream (Of Column) (EitherT String IO) ()
+    -> EitherT String IO () #-}
 
 
 putOrcStream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) m () -> ByteStream m ()
