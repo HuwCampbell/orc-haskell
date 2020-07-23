@@ -41,7 +41,7 @@ withFileLifted
   -> (Handle -> t IO r)
   -> t IO r
 withFileLifted file mode action =
-  liftWith (\run -> withFile file mode (run . action)) >>=
+  liftWith (\run -> withBinaryFile file mode (run . action)) >>=
     restoreT . return
 
 
