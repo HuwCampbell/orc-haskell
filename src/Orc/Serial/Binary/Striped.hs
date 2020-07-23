@@ -7,26 +7,22 @@
 
 module Orc.Serial.Binary.Striped (
     withOrcFile
-  , withOrcStripes
-  , checkOrcFile
-
-  , withFileLifted
-
-  , putColumn
   , putOrcFile
+
+  -- * Internal
+  , readStripe
+  , putOrcStream
 ) where
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
 import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, modify')
 import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
-import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Class (MonadTrans (..))
-import           Control.Monad.Trans.Either (EitherT, newEitherT, left)
+import           Control.Monad.Trans.Either (EitherT, newEitherT)
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
-import qualified Data.Serialize.Get as Get
 
 import           Data.List (dropWhile, reverse)
 
@@ -52,6 +48,8 @@ import           Orc.Serial.Binary.Internal.Compression
 import           Orc.Serial.Binary.Internal.Integers
 import           Orc.Serial.Binary.Internal.OrcNum
 
+import qualified Orc.Serial.Binary.Base as Base
+
 import           Orc.Table.Striped (Column (..))
 import qualified Orc.Table.Striped as Striped
 
@@ -64,46 +62,13 @@ import           Orc.Prelude
 type ByteStream = ByteStream.ByteString
 
 
-withFileLifted
-  :: (Monad (t IO), MonadTransControl t)
-  => FilePath
-  -> IOMode
-  -> (Handle -> t IO r)
-  -> t IO r
-withFileLifted file mode action =
-  liftWith (\run -> withFile file mode (run . action)) >>=
-    restoreT . return
-
-
-withOrcFile :: FilePath -> ((Handle, PostScript, Footer) -> EitherT String IO r) -> EitherT String IO r
-withOrcFile file action =
-  withFileLifted file ReadMode $ \handle -> do
-    (postScript, footer) <-
-      checkMagic handle
-
-    action (handle, postScript, footer)
-
-
-checkOrcFile :: FilePath -> EitherT String IO ([StripeInformation], Type, Maybe CompressionKind)
-checkOrcFile file =
-  withOrcFile file $ \(_, postScript, footer) -> do
-    let
-      stripeInfos =
-        stripes footer
-
-      typeInfo =
-        types footer
-
-    return (stripeInfos, typeInfo, compression postScript)
-
-
-withOrcStripes
+withOrcFile
   :: MonadIO m
   => FilePath
   -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT String m) ()) -> EitherT String IO r)
   -> EitherT String IO r
-withOrcStripes file action =
-  withOrcFile file $ \(handle, postScript, footer) -> do
+withOrcFile file action =
+  Base.withOrcFile file $ \(handle, postScript, footer) -> do
     let
       stripeInfos =
         stripes footer
@@ -115,53 +80,6 @@ withOrcStripes file action =
       Streaming.mapM
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)
-
-
-
--- | Checks that the magic values are present in the file
---   (i.e. makes sure that it is actually an ORC file)
-checkMagic :: MonadIO m => Handle -> EitherT String m (PostScript, Footer)
-checkMagic handle = do
-  liftIO  $ hSeek handle AbsoluteSeek 0
-  header <- liftIO (ByteString.hGet handle 3)
-
-  unless (header == "ORC") $
-    left "Invalid header - probably not an ORC file."
-
-  -- Seek to the last byte of the file to get the
-  -- size of the postscript.
-  liftIO  $
-    hSeek handle SeekFromEnd (-1)
-
-  psLength <-
-    newEitherT $ Get.runGet Get.getWord8 <$> liftIO (ByteString.hGet handle 1)
-
-  liftIO $
-    hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength)
-
-  postScript <-
-    newEitherT $ readPostScript <$> liftIO (ByteString.hGet handle $ fromIntegral psLength)
-
-  let
-    compressionInfo =
-      compression postScript
-
-    footerLen =
-      footerLength postScript
-
-  liftIO $
-    hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength + fromIntegral footerLen)
-
-  footerData <-
-    newEitherT $ readCompressedStream compressionInfo <$> liftIO (ByteString.hGet handle $ fromIntegral footerLen)
-
-  footer <-
-    liftEither $ readFooter footerData
-
-  liftIO $
-    hSeek handle AbsoluteSeek 3
-
-  return (postScript, footer)
 
 
 readStripe :: MonadIO m => Type -> Maybe CompressionKind -> Handle -> StripeInformation -> EitherT String m (StripeInformation, Column)
@@ -570,7 +488,7 @@ liftMaybe =
 
 putOrcFile :: Maybe Type -> Maybe CompressionKind -> FilePath -> Streaming.Stream (Of Column) (EitherT String IO) () -> EitherT String IO ()
 putOrcFile expectedType mCmprssn file column =
-  withFileLifted file WriteMode $ \handle -> do
+  Base.withFileLifted file WriteMode $ \handle -> do
     runReaderT ? mCmprssn $
       ByteStream.toHandle handle $
         putOrcStream expectedType $

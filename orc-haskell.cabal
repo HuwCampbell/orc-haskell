@@ -33,6 +33,7 @@ library
 
                        Orc.Schema.Types
 
+                       Orc.Serial.Binary.Base
                        Orc.Serial.Binary.Logical
                        Orc.Serial.Binary.Striped
 

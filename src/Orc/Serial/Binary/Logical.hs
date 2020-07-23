@@ -5,8 +5,8 @@
 {-# LANGUAGE LambdaCase          #-}
 
 module Orc.Serial.Binary.Logical (
-    withOrcStream
-  , putOrcStream
+    withOrcFile
+  , putOrcFile
   , printOrcFile
 ) where
 
@@ -21,7 +21,7 @@ import qualified Streaming.Prelude as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
 
 import           Orc.Schema.Types
-import           Orc.Serial.Binary.Striped
+import qualified Orc.Serial.Binary.Striped as Striped
 import           Orc.Serial.Json.Logical
 
 import           Orc.Table.Convert (streamLogical, streamFromLogical)
@@ -38,13 +38,13 @@ import           Orc.Prelude
 --   but entails a pivot of all the values. If speed is
 --   key, one may wish to use  withOrcStripes and do a
 --   predicate pushdown first.
-withOrcStream
+withOrcFile
   :: MonadIO m
   => FilePath
   -> (Type -> (Streaming.Stream (Of Logical.Row) (EitherT String m) ()) -> EitherT String IO r)
   -> EitherT String IO r
-withOrcStream fs action =
-  withOrcStripes fs $ \typ ->
+withOrcFile fs action =
+  Striped.withOrcFile fs $ \typ ->
     action typ .
       streamLogical .
         Streaming.map snd
@@ -56,14 +56,14 @@ withOrcStream fs action =
 -- do something useful with it.
 printOrcFile :: FilePath -> EitherT String IO ()
 printOrcFile fp = do
-  withOrcStream fp $ \_ ->
+  withOrcFile fp $ \_ ->
     ByteStream.stdout
       . ByteStream.concat
       . Streaming.maps (\(x :> r) -> ppJsonRow x $> r)
 
 
 
-putOrcStream :: Type -> Maybe CompressionKind -> Int -> FilePath -> Streaming.Stream (Of Logical.Row) (EitherT String IO) () -> EitherT String IO ()
-putOrcStream typ mCompression chunkSize fp =
-  putOrcFile (Just typ) mCompression fp .
+putOrcFile :: Type -> Maybe CompressionKind -> Int -> FilePath -> Streaming.Stream (Of Logical.Row) (EitherT String IO) () -> EitherT String IO ()
+putOrcFile typ mCompression chunkSize fp =
+  Striped.putOrcFile (Just typ) mCompression fp .
     streamFromLogical chunkSize typ

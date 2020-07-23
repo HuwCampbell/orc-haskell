@@ -26,7 +26,7 @@ import           Orc.Schema.Types
 import           Orc.Table.Logical
 import qualified Orc.Table.Convert as Convert
 
-import qualified Orc.Serial.Binary.Logical as Binary
+import qualified Orc.Serial.Binary.Logical as Logical
 
 import           Test.Orc.Type (genType, genCompressionKind)
 
@@ -118,12 +118,12 @@ prop_logical_tables_roundtrip_via_files = withTests 1000 . property $ do
     let tempFile  = dir </> "test.orc"
 
     evalExceptT . hoist evalIO $
-      Binary.putOrcStream typ cmpKind stripeSize tempFile $
+      Logical.putOrcFile typ cmpKind stripeSize tempFile $
         Streaming.each logical
 
     recreated :> () <-
       evalExceptT . hoist evalIO $
-        Binary.withOrcStream tempFile $ \_ ->
+        Logical.withOrcFile tempFile $ \_ ->
           Streaming.toList
 
     logical === recreated

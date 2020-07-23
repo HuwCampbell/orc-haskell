@@ -6,8 +6,9 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Either.Exit
 import           Data.Text (pack)
 
-import           Orc.Serial.Binary.Striped
-import           Orc.Serial.Binary.Logical
+import qualified Orc.Serial.Binary.Base as Base
+import qualified Orc.Serial.Binary.Striped as Striped
+import qualified Orc.Serial.Binary.Logical as Logical
 import           Orc.Schema.Types (CompressionKind (..), types)
 
 import           Options.Applicative
@@ -74,17 +75,17 @@ main = do
   orDie pack $
     case cmnd of
       Json orcIn ->
-        printOrcFile orcIn
+        Logical.printOrcFile orcIn
 
       Rewrite orcIn orcOut cmprssn ->
-        withOrcStripes orcIn $ \typ ->
-          putOrcFile (Just typ) cmprssn orcOut . Streaming.map snd
+        Striped.withOrcFile orcIn $ \typ ->
+          Striped.putOrcFile (Just typ) cmprssn orcOut . Streaming.map snd
 
       RoundTrip orcIn orcOut cmprssn chunks ->
-        withOrcStream orcIn $ \typ ->
-          putOrcStream typ cmprssn chunks orcOut
+        Logical.withOrcFile orcIn $ \typ ->
+          Logical.putOrcFile typ cmprssn chunks orcOut
 
       Type orcIn ->
-        withOrcFile orcIn $ \(_, _, f) ->
+        Base.withOrcFile orcIn $ \(_, _, f) ->
           liftIO $
             print (types f)
