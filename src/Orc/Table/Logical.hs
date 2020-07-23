@@ -17,6 +17,7 @@ module Orc.Table.Logical (
   , takeDate
   , takeFloat
   , takeDouble
+  , takeAnonymousStruct
   , takeStruct
   , takeUnion
   , takeList
@@ -130,8 +131,12 @@ takeDouble :: Row -> Maybe Double
 takeDouble (Double x) = Just x
 takeDouble _          = Nothing
 
-takeStruct :: Row -> Maybe (Boxed.Vector Row)
-takeStruct (Struct x) = Just (fmap fieldValue x)
+takeAnonymousStruct :: Row -> Maybe (Boxed.Vector Row)
+takeAnonymousStruct (Struct x) = Just (fmap fieldValue x)
+takeAnonymousStruct _          = Nothing
+
+takeStruct :: Row -> Maybe (Boxed.Vector (StructField Row))
+takeStruct (Struct x) = Just x
 takeStruct _          = Nothing
 
 takeUnion :: Row -> Maybe (Word8, Row)

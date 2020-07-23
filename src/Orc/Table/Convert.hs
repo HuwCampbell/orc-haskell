@@ -47,8 +47,6 @@ streamLogical ss =
     Streaming.each . toLogical
 
 
--- FIXME: This has failure states.
--- FIXME: This should return an either.
 toLogical :: Striped.Column -> Boxed.Vector Logical.Row
 toLogical =
   go
@@ -304,7 +302,7 @@ fromLogical' schema rows =
         traverse takeBinary rows
 
     STRUCT fts -> do
-      rows_  <- note "Take Struct" $ traverse takeStruct rows
+      rows_  <- note "Take Struct" $ traverse takeAnonymousStruct rows
       let
         vfts  = Boxed.fromList fts
         cols0 = transpose rows_

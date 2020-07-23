@@ -77,8 +77,8 @@ main = do
         printOrcFile orcIn
 
       Rewrite orcIn orcOut cmprssn ->
-        withOrcStripes orcIn $ \_ ->
-          putOrcFile cmprssn orcOut . Streaming.map snd
+        withOrcStripes orcIn $ \typ ->
+          putOrcFile (Just typ) cmprssn orcOut . Streaming.map snd
 
       RoundTrip orcIn orcOut cmprssn chunks ->
         withOrcStream orcIn $ \typ ->

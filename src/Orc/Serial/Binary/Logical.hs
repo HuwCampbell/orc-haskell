@@ -65,5 +65,5 @@ printOrcFile fp = do
 
 putOrcStream :: Type -> Maybe CompressionKind -> Int -> FilePath -> Streaming.Stream (Of Logical.Row) (EitherT String IO) () -> EitherT String IO ()
 putOrcStream typ mCompression chunkSize fp =
-  putOrcFile mCompression fp .
+  putOrcFile (Just typ) mCompression fp .
     streamFromLogical chunkSize typ

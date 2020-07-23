@@ -178,15 +178,15 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
         fromIntegral
 
   riLength <-
-    liftMaybe "Required Field Missing"
+    liftMaybe "Required Field Missing - Index Length"
       (indexLength stripeInfo)
 
   rdLength <-
-    liftMaybe "Required Field Missing"
+    liftMaybe "Required Field Missing - Data Length"
       (dataLength stripeInfo)
 
   rsLength <-
-    liftMaybe "Required Field Missing"
+    liftMaybe "Required Field Missing - Footer length"
       (siFooterLength stripeInfo)
 
   numRows <-
@@ -561,30 +561,36 @@ liftMaybe =
   liftEither ... note
 
 
+
 -- * -------------------
 -- Encoding
 -- * -------------------
 
 
 
-putOrcFile :: Maybe CompressionKind -> FilePath -> Streaming.Stream (Of Column) (EitherT String IO) () -> EitherT String IO ()
-putOrcFile mCmprssn file column =
+putOrcFile :: Maybe Type -> Maybe CompressionKind -> FilePath -> Streaming.Stream (Of Column) (EitherT String IO) () -> EitherT String IO ()
+putOrcFile expectedType mCmprssn file column =
   withFileLifted file WriteMode $ \handle -> do
     runReaderT ? mCmprssn $
       ByteStream.toHandle handle $
-        putOrcStream $
+        putOrcStream expectedType $
           Streaming.hoist lift column
 
 
 type OrcEncode m = ReaderT (Maybe CompressionKind) (EitherT String m)
 
 
-putOrcStream :: (MonadIO m) => Streaming.Stream (Of Column) (OrcEncode m) () -> ByteStream (OrcEncode m) ()
-putOrcStream column = do
+putOrcStream :: (MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) (OrcEncode m) () -> ByteStream (OrcEncode m) ()
+putOrcStream expectedType tableStream = do
   "ORC"
 
   (len, stripeInfos, t) :> () <-
-    hyloByteStream putTable (3,[],BOOLEAN) column
+    hyloByteStream putTable (3,[],expectedType) tableStream
+
+  ft <-
+    lift $ maybe
+      (throwError "No type information could be gathered from the stream and no default was given.")
+      pure t
 
   footerLen :> () <-
     stream_ $ do
@@ -593,7 +599,7 @@ putOrcStream column = do
           (Just 3)
           (Just (len + 3))
           (reverse stripeInfos)
-          t
+          ft
           []
           (Nothing)
           []
@@ -620,8 +626,8 @@ putOrcStream column = do
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 
-putTable :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => (Word64, [StripeInformation], Type) -> Column -> ByteStream m (Word64, [StripeInformation], Type)
-putTable (start, sis, _) column = do
+putTable :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => (Word64, [StripeInformation], Maybe Type) -> Column -> ByteStream m (Word64, [StripeInformation], Maybe Type)
+putTable (start, sis, startingType) column = do
   numRows <- lift $ liftEither $ Striped.length column
 
   (lenD :> (typ,(_,e,s))) <-
@@ -629,6 +635,11 @@ putTable (start, sis, _) column = do
       runStateT ? (0,[],[]) $ do
         ByteStream.distribute $
           putColumn column
+
+  for_ startingType $ \st ->
+    unless (st == typ) $
+      lift $
+        throwError ("Type of stripe wasn't expected. Expected " <> show st <> ", Stripe: " <> show typ)
 
   (lenF :> ()) <-
     stream_ $
@@ -643,7 +654,7 @@ putTable (start, sis, _) column = do
         (Just lenF)
         (Just (fromIntegral numRows))
 
-  return (start + lenD + lenF, si : sis, typ)
+  return (start + lenD + lenF, si : sis, Just typ)
 
 
 incColumn :: Monad m => StateT StripeState m ()
