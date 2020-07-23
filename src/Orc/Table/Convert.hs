@@ -32,7 +32,7 @@ import           Orc.X.Vector.Transpose (transpose)
 
 import           Orc.Prelude
 
-import qualified Data.Decimal as Decimal
+import qualified Data.Scientific as Scientific
 import           Data.String (String)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
@@ -131,7 +131,7 @@ toLogical =
         scale_ =
           Boxed.convert scale
         toDecimal i s =
-          fromIntegral i / 10 ^^ s
+          Scientific.scientific (fromIntegral i) (negate (fromIntegral s))
       in
         Boxed.zipWith (Logical.Decimal ... toDecimal) integral_ scale_
 
@@ -365,9 +365,8 @@ fromLogical' schema rows =
     DECIMAL -> do
       rows_  <- note "Take List" $ traverse takeDecimal rows
       let
-        toStripeDecimal (Decimal.Decimal places mantissa) =
-          let (n,p') = normalizePositive (mantissa, 0)
-          in  (fromInteger n, fromInteger $ fromIntegral places - p')
+        toStripeDecimal scientific =
+          (fromInteger $ Scientific.coefficient scientific, negate (fromIntegral $ Scientific.base10Exponent scientific))
 
       pure $
         uncurry Striped.Decimal $
@@ -375,12 +374,3 @@ fromLogical' schema rows =
           Boxed.unzip $
           Boxed.map toStripeDecimal $
             rows_
-
-
-normalizePositive :: (Integer, Integer) -> (Integer, Integer)
-normalizePositive (0, n) = (0, n)
-normalizePositive (!c, !n) =
-  case divMod c 10 of
-    (c', r)
-      | r  == 0   -> normalizePositive (c', n + 1)
-      | otherwise -> (c, n)

@@ -61,10 +61,10 @@ library
                      , ambiata-snapper
                      , bytestring
                      , cereal
-                     , Decimal
                      , mtl
                      , monad-control                   == 1.0.*
                      , protobuf                        >= 0.2        && < 0.3
+                     , scientific
                      , streaming                       >= 0.1        && < 0.3
                      , streaming-bytestring            >= 0.1        && < 0.2
                      , text                            >= 1.0        && < 1.3

@@ -60,7 +60,7 @@ genLogical = \case
     Timestamp <$>
       (Time.Timestamp <$> Gen.integral (Range.linearFrom 0 (-100000) (100000)) <*> Gen.integral (Range.linearFrom 0 0 999999999))
   DECIMAL ->
-    (Decimal . fromInteger) <$> Gen.integral (Range.linearFrom 0 (-10000) (10000))
+    Decimal . fromInteger <$>  Gen.integral (Range.linearFrom 0 (-10000000) (10000000))
   DATE ->
     Date . Time.Day <$> Gen.integral (Range.linearFrom 0 (-100000) (100000))
   STRING ->

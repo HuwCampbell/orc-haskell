@@ -29,7 +29,7 @@ module Orc.Table.Logical (
 import           Orc.Prelude
 
 import           Data.ByteString (ByteString)
-import           Data.Decimal (Decimal)
+import           Data.Scientific (Scientific)
 import           Data.Word (Word8)
 
 import qualified Data.Vector as Boxed
@@ -52,7 +52,7 @@ data Row
   | Integer   !Int32
   | Long      !Int64
 
-  | Decimal   !Decimal
+  | Decimal   !Scientific
   | Date      !Orc.Day
   | Timestamp !Orc.Timestamp
 
@@ -110,7 +110,7 @@ takeLong :: Row -> Maybe Int64
 takeLong (Long x) = Just x
 takeLong _        = Nothing
 
-takeDecimal :: Row -> Maybe Decimal
+takeDecimal :: Row -> Maybe Scientific
 takeDecimal (Decimal x) = Just x
 takeDecimal _           = Nothing
 
