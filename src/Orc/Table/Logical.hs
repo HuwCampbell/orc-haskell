@@ -65,8 +65,8 @@ data Row
 
   | Binary    !ByteString
 
-  -- For nullable columns.
-  | Partial   !(Maybe' Row)
+  -- For partial columns.
+  | Null
   deriving (Eq, Show)
 
 
@@ -146,7 +146,7 @@ takeMap :: Row -> Maybe (Boxed.Vector (Row,Row))
 takeMap (Map x) = Just x
 takeMap _       = Nothing
 
-takePartials :: Row -> Maybe (Maybe' Row)
-takePartials (Partial x) = Just x
-takePartials _           = Nothing
+takePartials :: Row -> Maybe' Row
+takePartials Null = Nothing'
+takePartials x    = Just' x
 

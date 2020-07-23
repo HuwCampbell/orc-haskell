@@ -27,7 +27,6 @@ import           Orc.Schema.Types as Orc
 import qualified Orc.Table.Striped as Striped
 import           Orc.Table.Logical as Logical
 
-import           Orc.X.Vector (safeHead)
 import qualified Orc.X.Vector.Segment as Segment
 import           Orc.X.Vector.Transpose (transpose)
 
@@ -188,17 +187,16 @@ toLogical =
           Boxed.convert present
 
       in
-        fmap Logical.Partial $
-          flip evalState 0 $
-            Boxed.forM boxed $ \here ->
-              if here then do
-                current <- get
-                let
-                  partials = activeRows Boxed.! current
-                put $ current + 1
-                pure (Just' partials)
-              else
-                pure Nothing'
+        flip evalState 0 $
+          Boxed.forM boxed $ \here ->
+            if here then do
+              current <- get
+              let
+                active = activeRows Boxed.! current
+              put $ current + 1
+              pure active
+            else
+              pure Null
 
     Striped.Union tags variants ->
       let
@@ -235,18 +233,18 @@ streamFromLogical chunkSize schema =
 
 
 fromLogical :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
-fromLogical schema rows =
-  case safeHead rows of
-    Just (Logical.Partial _) -> do
-      partials <- note "Take Partials" $ traverse takePartials rows
-      ms       <- fromLogical schema (Boxed.fromList $ catMaybes' $ Boxed.toList partials)
-      let
-        ps = fmap (isJust') partials
-      return $
-        Striped.Partial (Storable.convert ps) ms
+fromLogical schema rows = do
+  let
+    partials = fmap takePartials rows
+  ms       <- fromLogical' schema (Boxed.fromList $ catMaybes' $ Boxed.toList partials)
+  let
+    ps = fmap (isJust') partials
 
-    _ ->
-      fromLogical' schema rows
+  return $
+    if (Boxed.and ps) then
+      ms
+    else
+      Striped.Partial (Storable.convert ps) ms
 
 
 fromLogical' :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column

@@ -125,8 +125,8 @@ buildRow = \case
     in
       Builder.char8 '[' <> vals (ByteString.unpack b) <> Builder.char8 ']'
 
-  Partial mv ->
-    maybe' null_ buildRow mv
+  Null ->
+    null_
 
 -- | Render a struct field as an object part.
 buildField :: StructField Row -> Builder.Builder
