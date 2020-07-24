@@ -68,7 +68,6 @@ checkOrcFile file =
 
 
 
-
 -- | Checks that the magic values are present in the file
 --   (i.e. makes sure that it is actually an ORC file)
 checkMagic :: MonadIO m => Handle -> EitherT String m (PostScript, Footer)

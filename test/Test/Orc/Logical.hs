@@ -101,9 +101,9 @@ prop_logical_tables_round_trip_via_stipes = withTests 1000 . property $ do
   typ       <- forAll genType
   logical   <- forAll $ fromList <$> Gen.list (Range.linear 0 100) (genLogical typ)
   striped   <- evalEither $ Convert.fromLogical typ logical
-  recreated <- eval       $ Convert.toLogical striped
+  recreated <- Streaming.toList_ $ Convert.streamSingle striped
 
-  logical === recreated
+  logical === fromList recreated
 
 
 prop_logical_tables_roundtrip_via_files :: Property

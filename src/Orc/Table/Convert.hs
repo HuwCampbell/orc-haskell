@@ -4,216 +4,171 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE DoAndIfThenElse     #-}
 
 module Orc.Table.Convert (
-    toLogical
-  , streamLogical
+    streamLogical
+  , streamSingle
 
   , fromLogical
   , streamFromLogical
 ) where
 
-import           Control.Monad.State (evalState, put, get)
-import           Control.Monad.Trans.Either (EitherT, hoistEither)
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Either (EitherT, runEitherT, newEitherT, hoistEither)
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
+import qualified Streaming.Internal as Streaming
 import qualified Streaming.Prelude as Streaming
 
-import           Orc.Data.Data (StructField (..))
 import qualified Orc.Data.Time as Orc
 import           Orc.Schema.Types as Orc
 
 import qualified Orc.Table.Striped as Striped
 import           Orc.Table.Logical as Logical
 
-import qualified Orc.X.Vector.Segment as Segment
 import           Orc.X.Vector.Transpose (transpose)
 
 import           Orc.Prelude
 
+import qualified Data.List as List
 import qualified Data.Scientific as Scientific
 import           Data.String (String)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
-
-streamLogical
-  :: Monad m
-  => Streaming.Stream (Of Striped.Column) m x
-  -> Streaming.Stream (Of Logical.Row) m x
+streamLogical :: Monad m => Streaming.Stream (Of Striped.Column) m r -> Streaming.Stream (Of Row) m r
 streamLogical ss =
-  Streaming.for ss $
-    Streaming.each . toLogical
+  Streaming.for ss
+    streamSingle
 
 
-toLogical :: Striped.Column -> Boxed.Vector Logical.Row
-toLogical =
-  go
-    where
-  go = \case
-    Striped.Struct cols ->
-      let
-        logicals =
-          Boxed.map (go . fieldValue) cols
+streamSingle
+  :: Monad m
+  => Striped.Column
+  -> Streaming.Stream (Of Logical.Row) m ()
+streamSingle col = case col of
+  Striped.Bool x ->
+    Streaming.map Logical.Bool (eachStorable x)
 
-        transposed =
-          transpose logicals
+  Striped.Byte x ->
+    Streaming.map Logical.Byte (eachStorable x)
 
-        asFields =
-          Boxed.map (Boxed.zipWith (\s r -> s $> r) cols) transposed
-      in
-        fmap Logical.Struct asFields
+  Striped.Short x ->
+    Streaming.map Logical.Short (eachStorable x)
 
-    Striped.Map lengths keys values ->
-      let
-        key_ =
-          go keys
-        values_ =
-          go values
-        maps_ =
-          Boxed.zipWith
-            (Logical.Map ... Boxed.zip)
-            (Segment.unsafeReify lengths key_)
-            (Segment.unsafeReify lengths values_)
+  Striped.Integer x ->
+    Streaming.map Logical.Integer (eachStorable x)
 
-      in
-        maps_
+  Striped.Long x ->
+    Streaming.map Logical.Long (eachStorable x)
 
-    Striped.List lengths col ->
-      let
-        inner = go col
-      in
-        fmap Logical.List $ Segment.unsafeReify lengths inner
-
-    Striped.Bool bools ->
-      let
-        boxed =
-          Boxed.convert bools
-
-      in
-        fmap Logical.Bool boxed
-
-    Striped.Byte x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap Logical.Byte boxed
-
-    Striped.Short x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap Logical.Short boxed
-
-    Striped.Integer x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap Logical.Integer boxed
-
-    Striped.Long x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap Logical.Long boxed
-
-    Striped.Decimal integral scale ->
-      let
-        integral_ =
-          Boxed.convert integral
-        scale_ =
-          Boxed.convert scale
-        toDecimal i s =
+  Striped.Decimal x y ->
+    let
+      toDecimal i s =
+        Logical.Decimal $
           Scientific.scientific (fromIntegral i) (negate (fromIntegral s))
-      in
-        Boxed.zipWith (Logical.Decimal ... toDecimal) integral_ scale_
+    in
+      Streaming.zipWith toDecimal (eachStorable x) (eachStorable y)
 
-    Striped.Date x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap (Logical.Date . Orc.Day) $
-          boxed
+  Striped.Date bs ->
+    Streaming.map (Logical.Date . Orc.Day) (eachStorable bs)
 
-    Striped.Timestamp seconds nanos ->
-      let
-        seconds_ =
-          Boxed.convert seconds
-        nanos_ =
-          Boxed.convert nanos
-      in
-        Boxed.zipWith (Logical.Timestamp ... Orc.Timestamp) seconds_ nanos_
+  Striped.Timestamp x y ->
+    Streaming.zipWith (Logical.Timestamp ... Orc.Timestamp) (eachStorable x) (eachStorable y)
 
-    Striped.Float x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap Logical.Float boxed
+  Striped.Float x ->
+    Streaming.map Logical.Float (eachStorable x)
 
-    Striped.Double x ->
-      let
-        boxed =
-          Boxed.convert x
-      in
-        fmap Logical.Double boxed
+  Striped.Double x ->
+    Streaming.map Logical.Double (eachStorable x)
 
-    Striped.String x ->
-      fmap Logical.String x
+  Striped.String x ->
+    Streaming.map Logical.String (Streaming.each x)
 
-    Striped.Char x ->
-      fmap Logical.Char x
+  Striped.Char x ->
+    Streaming.map Logical.Char (Streaming.each x)
 
-    Striped.VarChar x ->
-      fmap Logical.VarChar x
+  Striped.VarChar x ->
+    Streaming.map Logical.VarChar (Streaming.each x)
 
-    Striped.Binary x ->
-      fmap Logical.Binary x
+  Striped.Binary x ->
+    Streaming.map Logical.Binary (Streaming.each x)
 
-    Striped.Partial present values ->
-      let
-        activeRows =
-          go values
 
-        boxed =
-          Boxed.convert present
+  Striped.Partial pBools inner ->
+    flip Streaming.unfoldr (eachStorable pBools, streamSingle inner) $
+      \(pS, iS) -> do
+        x3 <- Streaming.next pS
+        runEitherT $ do
+          (present, pRest) <- hoistEither x3
+          if present then do
+            (iVal, iRest) <- newEitherT $ Streaming.next iS
+            return $
+              (iVal, (pRest, iRest))
+          else
+            return $
+              (Null, (pRest, iS))
 
-      in
-        flip evalState 0 $
-          Boxed.forM boxed $ \here ->
-            if here then do
-              current <- get
-              let
-                active = activeRows Boxed.! current
-              put $ current + 1
-              pure active
-            else
-              pure Null
 
-    Striped.Union tags variants ->
-      let
-        variantRows =
-          Boxed.map go variants
+  Striped.Struct y ->
+    let
+      yy = fmap (fmap streamSingle) y
 
-        indicies =
-          Boxed.map (const 0) variants
+    in flip Streaming.unfoldr yy $ \yxy -> do
+      kk <- traverse (traverse Streaming.next) yxy
 
-      in
-        fmap (uncurry Logical.Union) $
-          flip evalState indicies $
-            Boxed.forM (Boxed.convert tags) $ \tag -> do
-              current <- get
-              let
-                rowIndex = current Boxed.! (fromIntegral tag)
+      return $ do
+        gg <-
+          traverse (traverse id) kk
+        pure $
+          (Logical.Struct $ fmap (fmap fst) gg, fmap (fmap snd) gg)
 
-              put $ current Boxed.// [(fromIntegral tag, rowIndex + 1)]
-              pure $ (tag, (variantRows Boxed.! (fromIntegral tag)) Boxed.! rowIndex)
+
+  Striped.Union t xs ->
+    flip Streaming.unfoldr (eachStorable t, fmap streamSingle xs) $
+      \(tS, current) -> do
+        x3 <- Streaming.next tS
+        runEitherT $ do
+          (tag, tagRest) <- hoistEither x3
+          let
+            rowIndex = current Boxed.! (fromIntegral tag)
+          (iVal, iRest) <- newEitherT $ Streaming.next rowIndex
+
+          return $
+            (Logical.Union tag iVal, (tagRest, current Boxed.// [(fromIntegral tag, iRest)]))
+
+
+  Striped.List l xs ->
+    flip Streaming.unfoldr (eachStorable l, streamSingle xs) $
+      \(lS, current) -> do
+        eLen <- Streaming.next lS
+        runEitherT $ do
+          (len, lenRest)    <- hoistEither eLen
+          (values :> xRest) <- lift $ Streaming.toList $ Streaming.splitAt (fromIntegral len) current
+          return $
+            (Logical.List (Boxed.fromListN (fromIntegral len) values), (lenRest, xRest))
+
+
+  Striped.Map l ks vs ->
+    flip Streaming.unfoldr (eachStorable l, streamSingle ks, streamSingle vs) $
+      \(lS, kCur, vCur) -> do
+        eLen <- Streaming.next lS
+        runEitherT $ do
+          (len, lenRest)    <- hoistEither eLen
+          (keys   :> kRest) <- lift $ Streaming.toList $ Streaming.splitAt (fromIntegral len) kCur
+          (values :> vRest) <- lift $ Streaming.toList $ Streaming.splitAt (fromIntegral len) vCur
+          return $
+            (Logical.Map (Boxed.fromListN (fromIntegral len) (List.zip keys values)), (lenRest, kRest, vRest))
+
+
+
+eachStorable :: Storable.Storable a => Storable.Vector a -> Streaming.Stream (Of a) m ()
+eachStorable =
+  Storable.foldr
+    (\a p -> Streaming.Step (a :> p))
+    (Streaming.Return ())
 
 
 
