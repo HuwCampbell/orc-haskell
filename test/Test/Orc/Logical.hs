@@ -1,8 +1,9 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE LambdaCase          #-}
 module Test.Orc.Logical (
   tests
 ) where
@@ -98,7 +99,12 @@ genLogical' = \case
 
 prop_logical_tables_round_trip_via_stipes :: Property
 prop_logical_tables_round_trip_via_stipes = withTests 1000 . property $ do
-  typ       <- forAll genType
+  typ     <- forAll $ genType
+  classify "map"    $ isMap typ
+  classify "list"   $ isList typ
+  classify "union"  $ isList typ
+  classify "struct" $ isList typ
+
   logical   <- forAll $ fromList <$> Gen.list (Range.linear 0 100) (genLogical typ)
   striped   <- evalEither $ Convert.fromLogical typ logical
   recreated <- Streaming.toList_ $ Convert.streamSingle striped
@@ -127,6 +133,13 @@ prop_logical_tables_roundtrip_via_files = withTests 1000 . property $ do
           Streaming.toList
 
     logical === recreated
+
+
+isMap, isList, isUnion, isStruct :: Type -> Bool
+isMap = \case { MAP {} -> True; _ -> False }
+isList = \case { LIST {} -> True; _ -> False }
+isUnion = \case { UNION {} -> True; _ -> False }
+isStruct = \case { STRUCT {} -> True; _ -> False }
 
 
 tests :: IO Bool
