@@ -152,7 +152,6 @@ takeMap :: Row -> Maybe (Boxed.Vector (Row,Row))
 takeMap (Map x) = Just x
 takeMap _       = Nothing
 
-takePartials :: Row -> Maybe' Row
-takePartials Null = Nothing'
-takePartials x    = Just' x
-
+takePartials :: Row -> Maybe Row
+takePartials Null = Nothing
+takePartials x    = Just x

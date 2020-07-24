@@ -34,18 +34,21 @@ import           Orc.X.Vector.Transpose (transpose)
 
 import           Orc.Prelude
 
+import qualified Data.Maybe as Maybe
 import qualified Data.List as List
 import qualified Data.Scientific as Scientific
 import           Data.String (String)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
+-- | Stream rows from a stream of striped tables
 streamLogical :: Monad m => Streaming.Stream (Of Striped.Column) m r -> Streaming.Stream (Of Row) m r
 streamLogical ss =
   Streaming.for ss
     streamSingle
 
 
+-- | Stream rows from a striped table
 streamSingle
   :: Monad m
   => Striped.Column
@@ -191,9 +194,9 @@ fromLogical :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
 fromLogical schema rows = do
   let
     partials = fmap takePartials rows
-  ms       <- fromLogical' schema (Boxed.fromList $ catMaybes' $ Boxed.toList partials)
+  ms       <- fromLogical' schema (Boxed.mapMaybe id partials)
   let
-    ps = fmap isJust' partials
+    ps = fmap Maybe.isJust partials
 
   return $
     if Boxed.and ps then

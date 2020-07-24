@@ -118,15 +118,6 @@ module Orc.Prelude (
   , itraverse
   , ifor
 
-  -- * Strict Maybe
-  ,  Maybe'(..)
-  , fromMaybe'
-  , fromMaybeM'
-  , isJust'
-  , isNothing'
-  , maybe'
-  , catMaybes'
-
   -- * Combinators
   , id
   , (.)
@@ -425,30 +416,6 @@ instance Fail.MonadFail Maybe' where
 (...) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (...) = (.) . (.)
 {-# INLINE (...) #-}
-
-
-maybe' :: b -> (a -> b) -> Maybe' a -> b
-maybe' n _ Nothing' = n
-maybe' _ f (Just' x) = f x
-
-isJust' :: Maybe' a -> Bool
-isJust' Nothing' = False
-isJust' (Just' _) = True
-
-isNothing' :: Maybe' a -> Bool
-isNothing' Nothing' = True
-isNothing' (Just' _) = False
-
-fromMaybe' :: a -> Maybe' a -> a
-fromMaybe' x Nothing' = x
-fromMaybe' _ (Just' y) = y
-
-fromMaybeM' :: Applicative f => f a -> Maybe' a -> f a
-fromMaybeM' = flip maybe' pure
-
-catMaybes' :: [Maybe' a] -> [a]
-catMaybes' as =
-  [ a | Just' a <- toList as ]
 
 
 
