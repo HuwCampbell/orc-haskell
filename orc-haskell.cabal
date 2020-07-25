@@ -64,6 +64,7 @@ library
                      , cereal
                      , mtl
                      , monad-control                   == 1.0.*
+                     , primitive
                      , protobuf                        >= 0.2        && < 0.3
                      , scientific
                      , streaming                       >= 0.1        && < 0.3

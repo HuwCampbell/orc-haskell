@@ -15,7 +15,8 @@ module Orc.Table.Convert (
   , streamFromLogical
 ) where
 
-import           Control.Monad.Trans.Class (lift)
+import           Control.Arrow ((&&&))
+import           Control.Monad.Primitive (PrimMonad)
 import           Control.Monad.Trans.Either (runEitherT, newEitherT, hoistEither)
 import           Control.Monad.Except (MonadError, liftEither)
 
@@ -31,18 +32,19 @@ import qualified Orc.Table.Striped as Striped
 import           Orc.Table.Logical as Logical
 
 import           Orc.X.Vector.Transpose (transpose)
+import qualified Orc.X.Streaming as Streaming
 
 import           Orc.Prelude
 
 import qualified Data.Maybe as Maybe
-import qualified Data.List as List
 import qualified Data.Scientific as Scientific
 import           Data.String (String)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
+
 -- | Stream rows from a stream of striped tables
-streamLogical :: Monad m => Streaming.Stream (Of Striped.Column) m r -> Streaming.Stream (Of Row) m r
+streamLogical :: PrimMonad m => Streaming.Stream (Of Striped.Column) m r -> Streaming.Stream (Of Row) m r
 streamLogical ss =
   Streaming.for ss
     streamSingle
@@ -50,7 +52,7 @@ streamLogical ss =
 
 -- | Stream rows from a striped table
 streamSingle
-  :: Monad m
+  :: PrimMonad m
   => Striped.Column
   -> Streaming.Stream (Of Logical.Row) m ()
 streamSingle col = case col of
@@ -117,18 +119,18 @@ streamSingle col = case col of
               (Null, (pRest, iS))
 
 
-  Striped.Struct y ->
+  Striped.Struct fs ->
     let
-      yy = fmap (fmap streamSingle) y
+      fsStream0 = fmap (fmap streamSingle) fs
 
-    in flip Streaming.unfoldr yy $ \yxy -> do
-      kk <- traverse (traverse Streaming.next) yxy
+    in flip Streaming.unfoldr fsStream0 $ \fsStream -> do
+      fsNexts <- traverse (traverse Streaming.next) fsStream
 
       return $ do
         gg <-
-          traverse (traverse id) kk
+          traverse sequence fsNexts
         pure $
-          (Logical.Struct $ fmap (fmap fst) gg, fmap (fmap snd) gg)
+          (Logical.Struct . fmap (fmap fst) &&& fmap (fmap snd)) gg
 
 
   Striped.Union t xs ->
@@ -151,9 +153,10 @@ streamSingle col = case col of
         eLen <- Streaming.next lS
         runEitherT $ do
           (len, lenRest)    <- hoistEither eLen
-          (values :> xRest) <- lift $ Streaming.toList $ Streaming.splitAt (fromIntegral len) current
+          let len0           = fromIntegral len
+          (values :> xRest) <- Streaming.toVectorN len0 $ Streaming.splitAt len0 current
           return $
-            (Logical.List (Boxed.fromListN (fromIntegral len) values), (lenRest, xRest))
+            (Logical.List values, (lenRest, xRest))
 
 
   Striped.Map l ks vs ->
@@ -162,10 +165,11 @@ streamSingle col = case col of
         eLen <- Streaming.next lS
         runEitherT $ do
           (len, lenRest)    <- hoistEither eLen
-          (keys   :> kRest) <- lift $ Streaming.toList $ Streaming.splitAt (fromIntegral len) kCur
-          (values :> vRest) <- lift $ Streaming.toList $ Streaming.splitAt (fromIntegral len) vCur
+          let len0           = fromIntegral len
+          (keys   :> kRest) <- Streaming.toVectorN len0 $ Streaming.splitAt len0 kCur
+          (values :> vRest) <- Streaming.toVectorN len0 $ Streaming.splitAt len0 vCur
           return $
-            (Logical.Map (Boxed.fromListN (fromIntegral len) (List.zip keys values)), (lenRest, kRest, vRest))
+            (Logical.Map (Boxed.zip keys values), (lenRest, kRest, vRest))
 
 
 

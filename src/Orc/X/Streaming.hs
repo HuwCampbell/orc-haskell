@@ -10,59 +10,33 @@ module Orc.X.Streaming (
     streamingLength
   , hyloByteStream
   , streamingPut
+
+  , toVector
+  , toVectorN
 ) where
 
 import           Orc.Prelude
 
 import           Control.Monad.IO.Class
+import           Control.Monad.Primitive (PrimMonad)
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
+import qualified Streaming.Prelude as Streaming
 import qualified Streaming.Internal as Streaming
 
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Streaming as ByteStream
 import qualified Data.ByteString.Streaming.Internal as ByteStream
 
+import qualified Data.Vector.Generic         as Vector
+import qualified Data.Vector.Generic.Mutable as MVector
+
 type ByteStream = ByteStream.ByteString
 
-
--- rechunk :: Monad m => Int -> ByteStream m a -> ByteStream m a
--- rechunk sz =
---   let
---     mkAcc = Builder.byteString
---     mkStrict = Lazy.toStrict . Builder.toLazyByteString
-
---     go acc i bs =
---       case bs of
---         ByteStream.Empty r ->
---           ByteStream.Empty r
-
---         ByteStream.Chunk s rest ->
---           let
---             ss = ByteString.length s
---           in
---             if (ss + i >= sz) then
---               let
---                 (emit, next) =
---                   ByteString.splitAt (sz - i) s
-
---               in
---                 ByteStream.Chunk (mkStrict (acc <> mkAcc emit)) $
---                   go mempty 0 $ ByteStream.Chunk next rest
-
---             else
---               go (acc <> mkAcc s) (i + ss) rest
-
---         ByteStream.Go act ->
---           ByteStream.Go $
---             fmap (go acc i) act
-
---   in
---     go mempty 0
 
 
 streamingLength :: Monad m => ByteStream m a -> ByteStream m (Of Word64 a)
@@ -99,9 +73,41 @@ hyloByteStream step begin =
         loop x' rest
 
 
-
 streamingPut :: MonadIO m => PutM a -> ByteStream m a
 streamingPut x =
   let (a, bldr) = Put.runPutMBuilder x
   in  ByteStream.toStreamingByteString bldr $> a
 {-# INLINE streamingPut #-}
+
+
+toVectorN :: (PrimMonad m, Vector.Vector v a) => Int -> Streaming.Stream (Of a) m r -> m (Of (v a) r)
+toVectorN i s = do
+  mv <- MVector.unsafeNew i
+  let
+    begin = do
+      return 0
+    step idx a = do
+      MVector.write mv idx a
+      return (idx + 1)
+    done idx = do
+      Vector.unsafeFreeze (MVector.take idx mv)
+  Streaming.foldM step begin done s
+{-# INLINABLE toVectorN #-}
+
+
+toVector :: (PrimMonad m, Vector.Vector v a) => Int -> Streaming.Stream (Of a) m r -> m (Of (v a) r)
+toVector i s =
+  let
+    begin = do
+      mv <- MVector.unsafeNew i
+      return (mv, 0)
+    step (mv, idx) a = do
+      let len = MVector.length mv
+      mv' <- if idx >= len then MVector.unsafeGrow mv len else return mv
+      MVector.unsafeWrite mv' idx a
+      return (mv', (idx + 1))
+    done (mv, idx) = do
+      Vector.freeze (MVector.take idx mv)
+  in
+    Streaming.foldM step begin done s
+{-# INLINABLE toVector #-}

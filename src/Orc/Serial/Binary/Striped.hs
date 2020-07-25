@@ -18,7 +18,6 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
 import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, modify')
 import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
-import           Control.Monad.Trans.Control (MonadTransControl (..))
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Either (EitherT)
 
@@ -294,7 +293,7 @@ decodeColumn typs rows =
 -- | Read a Column
 --
 --   The present column component has already been handled.
-decodeColumnPart :: (MonadError String (t IO), MonadIO (t IO), MonadTransControl t) => Type -> Word64 -> OrcDecode t IO Column
+decodeColumnPart :: MonadTransIO t => Type -> Word64 -> OrcDecode t IO Column
 decodeColumnPart typs rows = do
   currentEncoding' <-
      currentEncoding
@@ -305,9 +304,11 @@ decodeColumnPart typs rows = do
 
   case (typs, encodingKind) of
     (BOOLEAN, _) -> do
-      dataBytes <- popStream
-      bits      <- Storable.take (fromIntegral rows) <$>
-                    liftEither (decodeBits dataBytes)
+      dataBytes <-
+        popStream
+      bits <-
+        Storable.take (fromIntegral rows) <$>
+          liftEither (decodeBits dataBytes)
 
       return $ Bool bits
 
@@ -588,7 +589,7 @@ type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 putTable :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => (Word64, [StripeInformation], Maybe Type) -> Column -> ByteStream m (Word64, [StripeInformation], Maybe Type)
 putTable (start, sis, startingType) column = do
-  numRows <- lift $ liftEither $ Striped.length column
+  let numRows = Striped.length column
 
   (lenD :> (typ,(_,e,s))) <-
     streamingLength $

@@ -61,68 +61,68 @@ data Column
 
 
 
-length :: Column -> Either String Int
+length :: Column -> Int
 length = \case
   Struct cols ->
     case safeHead cols of
       Just col ->
         length (fieldValue col)
       Nothing  ->
-        Left "Can't determine length of Struct with no columns"
+        0
 
   Union t _ ->
-    Right $ Storable.length t
+    Storable.length t
 
   List ls _ ->
-    Right $ Storable.length ls
+    Storable.length ls
 
   Map ls _ _ -> do
-    Right $ Storable.length ls
+    Storable.length ls
 
   Bool x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Byte x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Short x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Integer x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Long x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Decimal x _ ->
-    Right $ Storable.length x
+    Storable.length x
 
   Date x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Timestamp x _ ->
-    Right $ Storable.length x
+    Storable.length x
 
   Float x ->
-    Right $ Storable.length x
+    Storable.length x
 
   Double x ->
-    Right $ Storable.length x
+    Storable.length x
 
   String x ->
-    Right $ Boxed.length x
+    Boxed.length x
 
   Char x ->
-    Right $ Boxed.length x
+    Boxed.length x
 
   VarChar x ->
-    Right $ Boxed.length x
+    Boxed.length x
 
   Binary x ->
-    Right $ Boxed.length x
+    Boxed.length x
 
   Partial x _ ->
-    Right $ Storable.length x
+    Storable.length x
 
 
 concat :: Type -> [Column] -> Either String Column

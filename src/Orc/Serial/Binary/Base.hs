@@ -18,6 +18,7 @@ module Orc.Serial.Binary.Base (
 ) where
 
 import           Control.Monad.IO.Class
+import           Control.Monad.Primitive (PrimMonad)
 import           Control.Monad.Except (MonadError, liftEither)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
 
@@ -36,7 +37,7 @@ import           System.IO as IO
 import           Orc.Prelude
 
 
-type MonadTransIO t = (MonadError String (t IO), MonadIO (t IO), MonadTransControl t)
+type MonadTransIO t = (MonadError String (t IO), MonadIO (t IO), PrimMonad (t IO), MonadTransControl t)
 
 
 withBinaryFileLifted
