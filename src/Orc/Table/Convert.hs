@@ -184,8 +184,11 @@ eachStorable =
 streamFromLogical
   :: (Monad m, MonadError String m)
   => Int
+  -- ^ Stripe size in number of rows
   -> Type
+  -- ^ Type of records in the stream
   -> Streaming.Stream (Of Logical.Row) m x
+  -- ^ Stream of typed records to write in ORC file
   -> Streaming.Stream (Of Striped.Column) m x
 streamFromLogical chunkSize schema =
   Streaming.mapM (liftEither . fromLogical schema . Boxed.fromList) .
@@ -213,60 +216,60 @@ fromLogical' :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
 fromLogical' schema rows =
   case schema of
     BOOLEAN ->
-      note "Bool" $
+      note "Data corruption. Expected Bool" $
       Striped.Bool . Boxed.convert <$>
         traverse takeBool rows
     BYTE ->
-      note "Bytes" $
+      note "Data corruption. Expected Bytes" $
       Striped.Byte . Boxed.convert <$>
         traverse takeByte rows
     SHORT ->
-      note "Short" $
+      note "Data corruption. Expected Short" $
       Striped.Short . Boxed.convert <$>
         traverse takeShort rows
     INT ->
-      note "Integer" $
+      note "Data corruption. Expected Integer" $
       Striped.Integer . Boxed.convert <$>
         traverse takeInteger rows
     LONG ->
-      note "Long" $
+      note "Data corruption. Expected Long" $
       Striped.Long . Boxed.convert <$>
         traverse takeLong rows
     DATE ->
-      note "Date" $
+      note "Data corruption. Expected Date" $
       Striped.Date . Boxed.convert <$>
         traverse takeDate rows
     FLOAT ->
-      note "Float" $
+      note "Data corruption. Expected Float" $
       Striped.Float . Boxed.convert <$>
         traverse takeFloat rows
     DOUBLE ->
-      note "Double" $
+      note "Data corruption. Expected Double" $
       Striped.Double . Boxed.convert <$>
         traverse takeDouble rows
 
     STRING ->
-      note "String" $
+      note "Data corruption. Expected String" $
       Striped.String <$>
         traverse takeString rows
 
     CHAR ->
-      note "Char" $
+      note "Data corruption. Expected Char" $
       Striped.Char <$>
         traverse takeChar rows
 
     VARCHAR ->
-      note "VarChar" $
+      note "Data corruption. Expected VarChar" $
       Striped.VarChar <$>
         traverse takeVarChar rows
 
     BINARY ->
-      note "Binary" $
+      note "Data corruption. Expected Binary" $
       Striped.Binary <$>
         traverse takeBinary rows
 
     STRUCT fts -> do
-      rows_  <- note "Take Struct" $ traverse takeAnonymousStruct rows
+      rows_  <- note "Data corruption. Expected " $ traverse takeAnonymousStruct rows
       let
         vfts  = Boxed.fromList fts
         cols0 = transpose rows_
@@ -281,7 +284,7 @@ fromLogical' schema rows =
         Striped.Struct cols
 
     LIST t -> do
-      rows_  <- note "Take List" $ traverse takeList rows
+      rows_  <- note "Data corruption. Expected List" $ traverse takeList rows
       let
         lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
       ls0    <- fromLogical t (Boxed.concat (Boxed.toList rows_))
@@ -289,7 +292,7 @@ fromLogical' schema rows =
         Striped.List lens ls0
 
     MAP kt vt -> do
-      rows_  <- note "Take Map" $ traverse takeMap rows
+      rows_  <- note "Data corruption. Expected Map" $ traverse takeMap rows
       let
         ks    = fmap (fmap fst) rows_
         vs    = fmap (fmap snd) rows_
@@ -300,7 +303,7 @@ fromLogical' schema rows =
         Striped.Map lens ks0 vs0
 
     UNION innerTypes -> do
-      rows_  <- note "Take Union" $ traverse takeUnion rows
+      rows_  <- note "Data corruption. Expected Union" $ traverse takeUnion rows
       let
         tags  = Boxed.convert $ fmap fst rows_
 
@@ -313,7 +316,7 @@ fromLogical' schema rows =
         Striped.Union tags (Boxed.fromList inners)
 
     TIMESTAMP -> do
-      rows_  <- note "Take Union" $ traverse takeTimestamp rows
+      rows_  <- note "Data corruption. Expected Union" $ traverse takeTimestamp rows
       let
         unTS (Orc.Timestamp seconds nanos) = (seconds, nanos)
 
@@ -325,7 +328,7 @@ fromLogical' schema rows =
             rows_
 
     DECIMAL -> do
-      rows_  <- note "Take List" $ traverse takeDecimal rows
+      rows_  <- note "Data corruption. Expected List" $ traverse takeDecimal rows
       let
         toStripeDecimal scientific =
           (fromInteger $ Scientific.coefficient scientific, negate (fromIntegral $ Scientific.base10Exponent scientific))

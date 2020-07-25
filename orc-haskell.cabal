@@ -25,6 +25,9 @@ library
   ghc-options:         -Wall
 
   exposed-modules:
+                       Orc.Logical
+                       Orc.Striped
+
                        Orc.Data.Data
                        Orc.Data.Segmented
                        Orc.Data.Time

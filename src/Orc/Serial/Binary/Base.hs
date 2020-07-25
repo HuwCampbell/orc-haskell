@@ -19,6 +19,7 @@ module Orc.Serial.Binary.Base (
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Primitive (PrimMonad)
+
 import           Control.Monad.Except (MonadError, liftEither)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
 

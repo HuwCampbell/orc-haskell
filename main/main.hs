@@ -7,9 +7,10 @@ import           Control.Monad.Trans.Either.Exit
 import           Data.Text (pack)
 
 import qualified Orc.Serial.Binary.Base as Base
-import qualified Orc.Serial.Binary.Striped as Striped
-import qualified Orc.Serial.Binary.Logical as Logical
 import           Orc.Schema.Types (CompressionKind (..), types)
+
+import qualified Orc.Logical as Logical
+import qualified Orc.Striped as Striped
 
 import           Options.Applicative
 
