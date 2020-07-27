@@ -668,7 +668,6 @@ putColumnPart = \case
     data_stream_ SK_DATA $ putBits bits
     return BOOLEAN
 
-
   Byte bytes -> do
     simpleEncoding DIRECT
     data_stream_ SK_DATA $ putBytes bytes
@@ -721,22 +720,19 @@ putColumnPart = \case
     data_stream_ SK_SECONDARY $ putIntegerRLEv1 scale
     return DECIMAL
 
-
   Timestamp seconds nanos -> do
     simpleEncoding DIRECT
     data_stream_ SK_DATA $ putIntegerRLEv1 seconds
     data_stream_ SK_SECONDARY $ putIntegerRLEv1 (Storable.map encodeNanoseconds nanos)
     return TIMESTAMP
 
-
   Date dates -> do
     simpleEncoding DIRECT
     data_stream_ SK_DATA $ putIntegerRLEv1 dates
     return DATE
 
-
   Struct fields -> do
-    _          <- simpleEncoding DIRECT
+    simpleEncoding DIRECT
     nestedType <-
       nestedEncode $
         traverse (traverse putColumn) fields
@@ -841,7 +837,7 @@ putDictionaryColumn
   -> Boxed.Vector ByteString
   -> ByteStream (StateT StripeState m) ()
 putDictionaryColumn indicies dictionary = do
-  simpleEncoding DICTIONARY
+  fullEncoding (Orc.ColumnEncoding DICTIONARY (Just . i2w32 $ Boxed.length dictionary))
   data_stream_ SK_DATA $ putIntegerRLEv1 indicies
   data_stream_ SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) dictionary)
   data_stream_ SK_DICTIONARY_DATA $ for_ dictionary Put.putByteString
