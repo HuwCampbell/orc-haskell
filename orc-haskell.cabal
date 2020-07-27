@@ -65,6 +65,7 @@ library
                      , ambiata-snapper
                      , bytestring
                      , cereal
+                     , containers
                      , mtl
                      , monad-control                   == 1.0.*
                      , primitive

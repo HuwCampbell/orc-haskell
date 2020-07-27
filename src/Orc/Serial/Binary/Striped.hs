@@ -16,7 +16,7 @@ module Orc.Serial.Binary.Striped (
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Except (MonadError, liftEither, throwError)
-import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, modify')
+import           Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, runState, modify')
 import           Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT, ask)
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Either (EitherT)
@@ -24,7 +24,9 @@ import           Control.Monad.Trans.Either (EitherT)
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
 
-import           Data.List (dropWhile, reverse)
+import           Data.List (dropWhile, reverse, sort)
+import qualified Data.Map as Map
+import qualified Data.Tuple as Tuple
 
 import           Data.String (String)
 import           Data.ByteString (ByteString)
@@ -462,7 +464,7 @@ decodeStringDirect decodeIntegerFunc = do
 
 decodeStringDictionary :: MonadTransIO t => (ByteString -> Either String (Storable.Vector Word64)) -> OrcDecode t IO (Boxed.Vector ByteString)
 decodeStringDictionary decodeIntegerFunc = do
-  dataBytes       <- popStream
+  dataBytes        <- popStream
   -- Specification appears to be incorrect here
   -- Length bytes comes before dictionary bytes;
   -- and, despite these being mandatory in the spec,
@@ -662,46 +664,39 @@ putColumn col =
 putColumnPart :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumnPart = \case
   Bool bits   -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putBits bits
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putBits bits
     return BOOLEAN
 
 
   Byte bytes -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putBytes bytes
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putBytes bytes
     return BYTE
 
   Short shorts -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putIntegerRLEv1 shorts
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putIntegerRLEv1 shorts
     return SHORT
 
   Integer ints -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putIntegerRLEv1 ints
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putIntegerRLEv1 ints
     return INT
 
   Long longs -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putIntegerRLEv1 longs
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putIntegerRLEv1 longs
     return LONG
 
   Float floats -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putFloat32 floats
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putFloat32 floats
     return FLOAT
 
   Double doubles -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putFloat64 doubles
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putFloat64 doubles
     return DOUBLE
 
   String strs -> do
@@ -721,27 +716,22 @@ putColumnPart = \case
     return BINARY
 
   Decimal words scale -> do
-    _          <- simpleEncoding DIRECT
-    (l0 :> _)  <- stream_ $ Storable.mapM putBase128Varint words
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
-    (l1 :> _)  <- stream_ $ putIntegerRLEv1 scale
-    _          <- record (\ix -> Stream (Just SK_SECONDARY) (Just ix) (Just l1))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ Storable.mapM_ putBase128Varint words
+    data_stream_ SK_SECONDARY $ putIntegerRLEv1 scale
     return DECIMAL
 
 
   Timestamp seconds nanos -> do
-    _          <- simpleEncoding DIRECT
-    (l0 :> _)  <- stream_ $ putIntegerRLEv1 seconds
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
-    (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.map encodeNanoseconds nanos)
-    _          <- record (\ix -> Stream (Just SK_SECONDARY) (Just ix) (Just l1))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putIntegerRLEv1 seconds
+    data_stream_ SK_SECONDARY $ putIntegerRLEv1 (Storable.map encodeNanoseconds nanos)
     return TIMESTAMP
 
 
   Date dates -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putIntegerRLEv1 dates
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putIntegerRLEv1 dates
     return DATE
 
 
@@ -755,9 +745,8 @@ putColumnPart = \case
 
 
   List lengths nested -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putIntegerRLEv1 lengths
-    _          <- record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_LENGTH $ putIntegerRLEv1 lengths
     nestedType <-
       nestedEncode $
         putColumn nested
@@ -766,9 +755,9 @@ putColumnPart = \case
 
 
   Map lengths keys values -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putIntegerRLEv1 lengths
-    _          <- record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_LENGTH $ putIntegerRLEv1 lengths
+
     (kT, vT)   <-
       nestedEncode $
         (,) <$> putColumn keys
@@ -778,9 +767,8 @@ putColumnPart = \case
 
 
   Union tags inners -> do
-    _          <- simpleEncoding DIRECT
-    (l :> _)   <- stream_ $ putBytes tags
-    _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l))
+    simpleEncoding DIRECT
+    data_stream_ SK_DATA $ putBytes tags
     innerTypes <-
       nestedEncode $
         for inners putColumn
@@ -789,24 +777,86 @@ putColumnPart = \case
 
 
   Partial presence inner -> do
-    (l :> _)   <- stream_ $ putBits presence
-    _          <- record (\ix -> Stream (Just SK_PRESENT) (Just ix) (Just l))
+    data_stream_ SK_PRESENT $ putBits presence
     putColumnPart inner
 
 
-putStringColumn :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Boxed.Vector ByteString -> ByteStream (StateT StripeState m) ()
-putStringColumn strs = do
-  _          <- simpleEncoding DIRECT
-  (l0 :> _)  <- stream_ $ for strs Put.putByteString
-  _          <- record (\ix -> Stream (Just SK_DATA) (Just ix) (Just l0))
+putStringColumn
+  :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m)
+  => Boxed.Vector ByteString
+  -> ByteStream (StateT StripeState m) ()
+putStringColumn strs =
+  let
+    go s = do
+      (dict,cur) <- get
+      let key = Map.lookup s dict
+      case key of
+        Just ix ->
+          return ix
+        Nothing -> do
+          put (Map.insert s cur dict, succ cur)
+          return cur
 
-  (l1 :> _)  <- stream_ $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) strs)
-  _          <- record (\ix -> Stream (Just SK_LENGTH) (Just ix) (Just l1))
-  return ()
+    (indicies, (dictMap, _)) =
+      runState ? (Map.empty, 0) $ do
+        mapM go strs
+
+    dictVec =
+      Boxed.fromList . fmap snd . sort . fmap Tuple.swap $
+        Map.toList dictMap
+
+    dictSize =
+      fromIntegral $
+        Map.size dictMap
+
+    originalSize =
+      fromIntegral $
+        Boxed.length indicies
+
+    threshold :: Double
+    threshold =
+      0.5
+
+  in
+    if (dictSize < originalSize * threshold) then
+      putDictionaryColumn (Storable.convert indicies) dictVec
+    else
+      putDirectColumn strs
+
+
+putDirectColumn
+  :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m)
+  => Boxed.Vector ByteString
+  -> ByteStream (StateT StripeState m) ()
+putDirectColumn strs = do
+  simpleEncoding DIRECT
+  data_stream_ SK_DATA $ for_ strs Put.putByteString
+  data_stream_ SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) strs)
+
+
+
+putDictionaryColumn
+  :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m)
+  => Storable.Vector Word64
+  -> Boxed.Vector ByteString
+  -> ByteStream (StateT StripeState m) ()
+putDictionaryColumn indicies dictionary = do
+  simpleEncoding DICTIONARY
+  data_stream_ SK_DATA $ putIntegerRLEv1 indicies
+  data_stream_ SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) dictionary)
+  data_stream_ SK_DICTIONARY_DATA $ for_ dictionary Put.putByteString
+
+
+data_stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => StreamKind -> PutM a -> ByteStream (StateT StripeState m) a
+data_stream_ sk p = do
+  (len :> a)  <- stream_ p
+  record (\ix -> Stream (Just sk) (Just ix) (Just len))
+  return a
+{-# INLINABLE data_stream_ #-}
 
 
 stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
-stream_ p =
+stream_ p = do
   streamingLength . ByteStream.mwrap $ do
     cmprssn     <- ask
     strict :> a <- ByteStream.toStrict (streamingPut p )
