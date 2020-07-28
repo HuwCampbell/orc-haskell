@@ -56,7 +56,6 @@ library
                        Orc.Table.Logical
                        Orc.Table.Striped
 
-                       Orc.X.Vector.Segment
                        Orc.X.Vector.Transpose
                        Orc.X.Vector
                        Orc.X.Streaming
