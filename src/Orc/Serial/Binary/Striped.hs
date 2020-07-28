@@ -25,7 +25,7 @@ import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
 
 import           Data.List (dropWhile, reverse, sort)
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified Data.Tuple as Tuple
 
 import           Data.String (String)
@@ -783,19 +783,19 @@ putStringColumn
   -> ByteStream (StateT StripeState m) ()
 putStringColumn strs =
   let
-    go s = do
-      (dict,cur) <- get
-      let key = Map.lookup s dict
+    addOrFind str = do
+      !(dict,cur) <- get
+      let key = Map.lookup str dict
       case key of
         Just ix ->
           return ix
         Nothing -> do
-          put (Map.insert s cur dict, succ cur)
+          put (Map.insert str cur dict, succ cur)
           return cur
 
     (indicies, (dictMap, _)) =
       runState ? (Map.empty, 0) $ do
-        mapM go strs
+        mapM addOrFind strs
 
     dictVec =
       Boxed.fromList . fmap snd . sort . fmap Tuple.swap $
@@ -837,7 +837,7 @@ putDictionaryColumn
   -> Boxed.Vector ByteString
   -> ByteStream (StateT StripeState m) ()
 putDictionaryColumn indicies dictionary = do
-  fullEncoding (Orc.ColumnEncoding DICTIONARY (Just . i2w32 $ Boxed.length dictionary))
+  fullEncoding $ Orc.ColumnEncoding DICTIONARY (Just (i2w32 (Boxed.length dictionary)))
   data_stream_ SK_DATA $ putIntegerRLEv1 indicies
   data_stream_ SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) dictionary)
   data_stream_ SK_DICTIONARY_DATA $ for_ dictionary Put.putByteString
@@ -848,7 +848,6 @@ data_stream_ sk p = do
   (len :> a)  <- stream_ p
   record (\ix -> Stream (Just sk) (Just ix) (Just len))
   return a
-{-# INLINABLE data_stream_ #-}
 
 
 stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
@@ -858,12 +857,10 @@ stream_ p = do
     strict :> a <- ByteStream.toStrict (streamingPut p )
     blah        <- liftEither $ writeCompressedStream cmprssn strict
     return $ ByteStream.toStreamingByteString blah $> a
-{-# INLINABLE stream_ #-}
 
 
 streamUncompressed_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
 streamUncompressed_ = streamingLength . streamingPut
-{-# INLINABLE streamUncompressed_ #-}
 
 
 i2w32 :: Int -> Word32
