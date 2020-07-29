@@ -39,7 +39,6 @@ import qualified Orc.Data.Time as Orc
 import           Orc.Table.Logical (Row (..))
 
 
-
 ppJsonRow :: MonadIO m => Row -> Streaming.ByteString m ()
 ppJsonRow =
   Streaming.toStreamingByteString . (<> Builder.char8 '\n') . buildRow

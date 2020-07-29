@@ -41,7 +41,10 @@ data DateTime = DateTime {
   , dtTime :: !Word64
   } deriving (Eq, Ord, Show)
 
-
+-- | Convert Orc days to simple Date type
+--
+-- >>> dayToDate $ Day 0
+-- Date {dateYear = 1970, dateMonth = 1, dateDay = 1}
 dayToDate :: Day -> Date
 dayToDate (Day g) =
   let
@@ -66,7 +69,8 @@ dayToDate (Day g) =
   in
     Date (y + (mi + 2)`div`12) mm dd
 
-
+-- >>> timestampToDateTime $ Timestamp 0 0
+-- DateTime {dtDate = Date {dateYear = 2015, dateMonth = 1, dateDay = 1}, dtTime = 0}
 timestampToDateTime :: Timestamp -> DateTime
 timestampToDateTime (Timestamp ts tn) =
   let
