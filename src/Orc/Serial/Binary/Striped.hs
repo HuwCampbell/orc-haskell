@@ -556,7 +556,7 @@ putOrcStream expectedType tableStream = do
       pure t
 
   footerLen :> () <-
-    stream_ $ do
+    put_stream $ do
       putFooter $
         Footer
           (Just 3)
@@ -571,7 +571,7 @@ putOrcStream expectedType tableStream = do
   cmprssn <- lift ask
 
   psLength :> () <-
-    streamUncompressed_ $
+    put_uncompressed_stream $
       putPostScript $
         PostScript
           (fromIntegral footerLen)
@@ -605,7 +605,7 @@ putTable (start, sis, startingType) column = do
         throwError ("Type of stripe wasn't expected. Expected " <> show st <> ", Stripe: " <> show typ)
 
   (lenF :> ()) <-
-    stream_ $
+    put_stream $
       putStripeFooter $ StripeFooter (reverse s) (reverse e) Nothing
 
   let
@@ -665,37 +665,37 @@ putColumnPart :: (MonadReader (Maybe CompressionKind) m, MonadError String m, Mo
 putColumnPart = \case
   Bool bits   -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putBits bits
+    put_data_stream SK_DATA $ putBits bits
     return BOOLEAN
 
   Byte bytes -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putBytes bytes
+    put_data_stream SK_DATA $ putBytes bytes
     return BYTE
 
   Short shorts -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putIntegerRLEv1 shorts
+    put_data_stream SK_DATA $ putIntegerRLEv1 shorts
     return SHORT
 
   Integer ints -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putIntegerRLEv1 ints
+    put_data_stream SK_DATA $ putIntegerRLEv1 ints
     return INT
 
   Long longs -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putIntegerRLEv1 longs
+    put_data_stream SK_DATA $ putIntegerRLEv1 longs
     return LONG
 
   Float floats -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putFloat32 floats
+    put_data_stream SK_DATA $ putFloat32 floats
     return FLOAT
 
   Double doubles -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putFloat64 doubles
+    put_data_stream SK_DATA $ putFloat64 doubles
     return DOUBLE
 
   String strs -> do
@@ -716,19 +716,19 @@ putColumnPart = \case
 
   Decimal words scale -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ Storable.mapM_ putBase128Varint words
-    data_stream_ SK_SECONDARY $ putIntegerRLEv1 scale
+    put_data_stream SK_DATA $ Storable.mapM_ putBase128Varint words
+    put_data_stream SK_SECONDARY $ putIntegerRLEv1 scale
     return DECIMAL
 
   Timestamp seconds nanos -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putIntegerRLEv1 seconds
-    data_stream_ SK_SECONDARY $ putIntegerRLEv1 (Storable.map encodeNanoseconds nanos)
+    put_data_stream SK_DATA $ putIntegerRLEv1 seconds
+    put_data_stream SK_SECONDARY $ putIntegerRLEv1 (Storable.map encodeNanoseconds nanos)
     return TIMESTAMP
 
   Date dates -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putIntegerRLEv1 dates
+    put_data_stream SK_DATA $ putIntegerRLEv1 dates
     return DATE
 
   Struct fields -> do
@@ -742,7 +742,7 @@ putColumnPart = \case
 
   List lengths nested -> do
     simpleEncoding DIRECT
-    data_stream_ SK_LENGTH $ putIntegerRLEv1 lengths
+    put_data_stream SK_LENGTH $ putIntegerRLEv1 lengths
     nestedType <-
       nestedEncode $
         putColumn nested
@@ -752,7 +752,7 @@ putColumnPart = \case
 
   Map lengths keys values -> do
     simpleEncoding DIRECT
-    data_stream_ SK_LENGTH $ putIntegerRLEv1 lengths
+    put_data_stream SK_LENGTH $ putIntegerRLEv1 lengths
 
     (kT, vT)   <-
       nestedEncode $
@@ -764,7 +764,7 @@ putColumnPart = \case
 
   Union tags inners -> do
     simpleEncoding DIRECT
-    data_stream_ SK_DATA $ putBytes tags
+    put_data_stream SK_DATA $ putBytes tags
     innerTypes <-
       nestedEncode $
         for inners putColumn
@@ -773,7 +773,7 @@ putColumnPart = \case
 
 
   Partial presence inner -> do
-    data_stream_ SK_PRESENT $ putBits presence
+    put_data_stream SK_PRESENT $ putBits presence
     putColumnPart inner
 
 
@@ -826,8 +826,8 @@ putDirectColumn
   -> ByteStream (StateT StripeState m) ()
 putDirectColumn strs = do
   simpleEncoding DIRECT
-  data_stream_ SK_DATA $ for_ strs Put.putByteString
-  data_stream_ SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) strs)
+  put_data_stream SK_DATA $ for_ strs Put.putByteString
+  put_data_stream SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) strs)
 
 
 
@@ -838,20 +838,20 @@ putDictionaryColumn
   -> ByteStream (StateT StripeState m) ()
 putDictionaryColumn indicies dictionary = do
   fullEncoding $ Orc.ColumnEncoding DICTIONARY (Just (i2w32 (Boxed.length dictionary)))
-  data_stream_ SK_DATA $ putIntegerRLEv1 indicies
-  data_stream_ SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) dictionary)
-  data_stream_ SK_DICTIONARY_DATA $ for_ dictionary Put.putByteString
+  put_data_stream SK_DATA $ putIntegerRLEv1 indicies
+  put_data_stream SK_LENGTH $ putIntegerRLEv1 (Storable.convert $ fmap (i2w32 . ByteString.length) dictionary)
+  put_data_stream SK_DICTIONARY_DATA $ for_ dictionary Put.putByteString
 
 
-data_stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => StreamKind -> PutM a -> ByteStream (StateT StripeState m) a
-data_stream_ sk p = do
-  (len :> a)  <- stream_ p
+put_data_stream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => StreamKind -> PutM a -> ByteStream (StateT StripeState m) a
+put_data_stream sk p = do
+  (len :> a)  <- put_stream p
   record (\ix -> Stream (Just sk) (Just ix) (Just len))
   return a
 
 
-stream_ :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
-stream_ p = do
+put_stream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
+put_stream p = do
   streamingLength . ByteStream.mwrap $ do
     cmprssn     <- ask
     strict :> a <- ByteStream.toStrict (streamingPut p )
@@ -859,8 +859,8 @@ stream_ p = do
     return $ ByteStream.toStreamingByteString blah $> a
 
 
-streamUncompressed_ :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
-streamUncompressed_ = streamingLength . streamingPut
+put_uncompressed_stream :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
+put_uncompressed_stream = streamingLength . streamingPut
 
 
 i2w32 :: Int -> Word32

@@ -44,7 +44,7 @@ import qualified Data.Serialize.Put as Put
 
 import qualified Data.Serialize.IEEE754 as IEEE754
 
-import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR)
+import           Data.Bits ((.&.), (.|.), complement, shiftL, shiftR, testBit)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as ByteString
 import           Data.Word (Word8, Word16, Word32)
@@ -120,12 +120,13 @@ getBase128Varint =
         new =
           (fromIntegral masked `shiftL` shift) .|. accumulator
 
-        terminates =
-          (byte .&. b10000000) /= b10000000
+        continues =
+          testBit byte 7
 
-      if terminates
-        then return (unZigZag new)
-        else go new (7 + shift)
+      if continues then
+        go new (7 + shift)
+      else
+        return (unZigZag new)
   in
     go 0 0
 
@@ -186,21 +187,20 @@ getIntegerRLEv1 =
     getSet :: Get (Storable.Vector w)
     getSet = do
       header <- Get.getInt8
-      if header >= 0
-        then do
-          let
-            runLength :: Int
-            runLength = fromIntegral header + 3;
+      if header >= 0 then do
+        let
+          runLength :: Int
+          runLength = fromIntegral header + 3;
 
-          delta   <- Get.getInt8
-          initial <- getBase128Varint
-          return $
-            Storable.enumFromStepN initial (fromIntegral delta) runLength
+        delta   <- Get.getInt8
+        initial <- getBase128Varint
+        return $
+          Storable.enumFromStepN initial (fromIntegral delta) runLength
 
-        else do
-          let
-            listLength = negate $ fromIntegral header
-          Storable.replicateM listLength getBase128Varint
+      else do
+        let
+          listLength = negate $ fromIntegral header
+        Storable.replicateM listLength getBase128Varint
 
   in
     Storable.concat <$>
