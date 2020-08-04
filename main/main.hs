@@ -2,10 +2,7 @@ module Main (
   main
 ) where
 
-import           Control.Exception (displayException)
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Either.Exit
-import           Data.Text (pack)
 
 import qualified Orc.Serial.Binary.Base as Base
 import           Orc.Schema.Types (CompressionKind (..), types)
@@ -78,7 +75,7 @@ main = do
       Logical.printOrcFile orcIn
 
     Rewrite orcIn orcOut cmprssn ->
-      orDie (pack . displayException) $
+      Base.raisingOrcErrors $
         Striped.withOrcFileLifted orcIn $ \typ ->
           Striped.putOrcFileLifted (Just typ) cmprssn orcOut . Streaming.map snd
 
@@ -87,7 +84,7 @@ main = do
         Logical.putOrcFile typ cmprssn chunks orcOut
 
     Type orcIn ->
-      orDie (pack . displayException) $
+      Base.raisingOrcErrors $
         Base.withOrcFileLifted orcIn $ \(_, _, f) ->
           liftIO $
             print (types f)

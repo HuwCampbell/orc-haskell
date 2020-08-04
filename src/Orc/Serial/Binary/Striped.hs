@@ -535,7 +535,7 @@ putOrcFileLifted
   -> Streaming.Stream (Of Column) (t IO) ()
   -> t IO ()
 putOrcFileLifted expectedType mCmprssn file column =
-  Base.withBinaryFileLifted file WriteMode $ \handle -> do
+  Base.withBinaryFileLifted file WriteMode $ \handle ->
     runReaderT ? mCmprssn $
       ByteStream.toHandle handle $
         putOrcStream expectedType $

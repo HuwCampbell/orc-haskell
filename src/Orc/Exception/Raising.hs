@@ -42,7 +42,7 @@ import           Orc.Prelude
 --   explicitly in an either.
 newtype Raising io a =
   Raising {
-    unRaising :: io a
+    raisingOrcErrors :: io a
   } deriving (Functor, Applicative, Monad, MonadIO)
 
 instance MonadTrans Raising where
@@ -51,7 +51,7 @@ instance MonadTrans Raising where
 
 instance MonadTransControl Raising where
   type StT Raising a = a
-  liftWith f = Raising $ f $ unRaising
+  liftWith f = Raising $ f $ raisingOrcErrors
   restoreT = Raising
   {-# INLINABLE liftWith #-}
   {-# INLINABLE restoreT #-}

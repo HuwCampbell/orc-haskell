@@ -91,10 +91,10 @@ withOrcFile
   -- ^ How to consume the stream of values as a continuation
   -> IO r
 withOrcFile fs action =
-  unRaising $
+  raisingOrcErrors $
     withOrcFileLifted fs $ \t s ->
       Raising . action t $
-        Streaming.hoist unRaising s
+        Streaming.hoist raisingOrcErrors s
 
 
 -- | Simple pretty printer of ORC to JSON.
@@ -168,6 +168,6 @@ putOrcFile
   -- ^ The stream of 'Logical.Row' to write
   -> IO ()
 putOrcFile typ mCompression chunkSize fp s =
-  unRaising $
+  raisingOrcErrors $
     putOrcFileLifted typ mCompression chunkSize fp $
       Streaming.hoist Raising s
