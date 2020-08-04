@@ -75,7 +75,7 @@ instance MonadBaseControl IO io => MonadBaseControl IO (Raising io) where
 
 instance MonadBaseControl IO io => MonadError OrcException (Raising io) where
   throwError =
-    Raising . liftBase . throwIO
+    liftBase . throwIO
   {-# INLINE throwError #-}
 
   catchError a handler =
