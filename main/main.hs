@@ -2,6 +2,7 @@ module Main (
   main
 ) where
 
+import           Control.Exception (displayException)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Either.Exit
 import           Data.Text (pack)
@@ -72,21 +73,21 @@ compressionReadM = eitherReader $
 main :: IO ()
 main = do
   cmnd <- customExecParser (prefs showHelpOnEmpty) (info (parser <**> helper) idm)
+  case cmnd of
+    Json orcIn ->
+      Logical.printOrcFile orcIn
 
-  orDie pack $
-    case cmnd of
-      Json orcIn ->
-        Logical.printOrcFile orcIn
+    Rewrite orcIn orcOut cmprssn ->
+      orDie (pack . displayException) $
+        Striped.withOrcFileLifted orcIn $ \typ ->
+          Striped.putOrcFileLifted (Just typ) cmprssn orcOut . Streaming.map snd
 
-      Rewrite orcIn orcOut cmprssn ->
-        Striped.withOrcFile orcIn $ \typ ->
-          Striped.putOrcFile (Just typ) cmprssn orcOut . Streaming.map snd
+    RoundTrip orcIn orcOut cmprssn chunks ->
+      Logical.withOrcFile orcIn $ \typ ->
+        Logical.putOrcFile typ cmprssn chunks orcOut
 
-      RoundTrip orcIn orcOut cmprssn chunks ->
-        Logical.withOrcFile orcIn $ \typ ->
-          Logical.putOrcFile typ cmprssn chunks orcOut
-
-      Type orcIn ->
-        Base.withOrcFile orcIn $ \(_, _, f) ->
+    Type orcIn ->
+      orDie (pack . displayException) $
+        Base.withOrcFileLifted orcIn $ \(_, _, f) ->
           liftIO $
             print (types f)

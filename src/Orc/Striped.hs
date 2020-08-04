@@ -1,6 +1,6 @@
 module Orc.Striped (
-    Striped.withOrcFile
-  , Striped.putOrcFile
+    Striped.withOrcFileLifted
+  , Striped.putOrcFileLifted
 
   , module Orc.Table.Striped
 

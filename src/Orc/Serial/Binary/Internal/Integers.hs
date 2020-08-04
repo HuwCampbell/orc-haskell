@@ -235,7 +235,6 @@ putIntegerRLEv1 =
             in  (List.replicate (fromIntegral i) x <> r, rs)
           | otherwise
           = ([], rest)
-
       in go 0
 
     putSet :: Putter (Storable.Vector w)

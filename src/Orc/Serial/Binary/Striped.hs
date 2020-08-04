@@ -6,8 +6,8 @@
 {-# LANGUAGE FlexibleContexts    #-}
 
 module Orc.Serial.Binary.Striped (
-    withOrcFile
-  , putOrcFile
+    withOrcFileLifted
+  , putOrcFileLifted
 
   -- * Internal
   , readStripe
@@ -50,7 +50,7 @@ import           Orc.Serial.Binary.Internal.Compression
 import           Orc.Serial.Binary.Internal.Integers
 import           Orc.Serial.Binary.Internal.OrcNum
 
-import           Orc.Serial.Binary.Base (MonadTransIO)
+import           Orc.Serial.Binary.Base (MonadTransIO, OrcException (..), Raising, liftEitherString)
 import qualified Orc.Serial.Binary.Base as Base
 
 import           Orc.Table.Striped (Column (..))
@@ -65,13 +65,13 @@ import           Orc.Prelude
 type ByteStream = ByteStream.ByteString
 
 
-withOrcFile
+withOrcFileLifted
   :: MonadTransIO t
   => FilePath
   -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (t IO) ()) -> t IO r)
   -> t IO r
-withOrcFile file action =
-  Base.withOrcFile file $ \(handle, postScript, footer) -> do
+withOrcFileLifted file action =
+  Base.withOrcFileLifted file $ \(handle, postScript, footer) -> do
     let
       stripeInfos =
         stripes footer
@@ -84,13 +84,20 @@ withOrcFile file action =
         (readStripe typeInfo (compression postScript) handle)
         (Streaming.each stripeInfos)
 
+{-# SPECIALIZE
+  withOrcFileLifted
+    :: FilePath
+    -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT OrcException IO) ())
+    -> EitherT OrcException IO r)
+    -> EitherT OrcException IO r #-}
+
 
 {-# SPECIALIZE
-  withOrcFile
+  withOrcFileLifted
     :: FilePath
-    -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (EitherT String IO) ())
-    -> EitherT String IO r)
-    -> EitherT String IO r #-}
+    -> (Type -> (Streaming.Stream (Of (StripeInformation, Column)) (Raising IO) ())
+    -> Raising IO r)
+    -> Raising IO r #-}
 
 
 readStripe
@@ -113,19 +120,19 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
         fromIntegral
 
   riLength <-
-    liftMaybe "Required Field Missing - Index Length"
+    liftMaybe (OrcException "Required Field Missing - Index Length")
       (indexLength stripeInfo)
 
   rdLength <-
-    liftMaybe "Required Field Missing - Data Length"
+    liftMaybe (OrcException "Required Field Missing - Data Length")
       (dataLength stripeInfo)
 
   rsLength <-
-    liftMaybe "Required Field Missing - Footer length"
+    liftMaybe (OrcException "Required Field Missing - Footer length")
       (siFooterLength stripeInfo)
 
   numRows <-
-    liftMaybe "Required Field Missing - Number of Rows"
+    liftMaybe (OrcException "Required Field Missing - Number of Rows")
       (siNumberOfRows stripeInfo)
 
   --
@@ -148,10 +155,10 @@ readStripe typeInfo mCompressionInfo handle stripeInfo = do
     hSeek handle RelativeSeek (fromIntegral rdLength)
 
   stripeFooterData <-
-    liftEither . readCompressedStream mCompressionInfo =<< liftIO (ByteString.hGet handle $ fromIntegral rsLength)
+    liftEitherString . readCompressedStream mCompressionInfo =<< liftIO (ByteString.hGet handle $ fromIntegral rsLength)
 
   stripeFooter <-
-    liftEither $
+    liftEitherString $
       readStripeFooter stripeFooterData
 
   let
@@ -198,7 +205,7 @@ withPresence rows act = do
   case mPresenceBytes of
     Just presenceBytes -> do
       presenceColumn <-
-        liftEither $
+        liftEitherString $
           Storable.take (fromIntegral rows) <$>
             decodeBits presenceBytes
 
@@ -234,7 +241,7 @@ popStream = do
   case orcStreams of
     s:rest | streamColumn s == Just (currentIndex ix) -> do
       colLength <-
-        liftMaybe "Need Column Length" $
+        liftMaybe (OrcException "Need Column Length") $
           streamLength s
 
       (uncompressedBytes :> remainingBytes) <-
@@ -242,17 +249,17 @@ popStream = do
           ByteStream.splitAt (fromIntegral colLength) bytes
 
       theseBytes <-
-        liftEither $ readCompressedStream compressionInfo uncompressedBytes
+        liftEitherString $ readCompressedStream compressionInfo uncompressedBytes
 
       put (ix, rest, remainingBytes)
       return $! theseBytes
 
     _:_ ->
-      throwError $
+      throwError $ OrcException $
         "Streams remain, but not for column: " <> show (currentIndex ix)
 
     _ ->
-      throwError $
+      throwError $ OrcException $
         "No streams remaining trying to pop column: " <> show (currentIndex ix)
 
 
@@ -275,11 +282,11 @@ nestedColumn f =
   incrementColumn *> f <* decrementColumn
 
 
-currentEncoding :: (MonadError String (t m), Monad (t m)) => OrcDecode t m (Orc.ColumnEncoding)
+currentEncoding :: (MonadError OrcException (t m), Monad (t m)) => OrcDecode t m (Orc.ColumnEncoding)
 currentEncoding = do
   (ix, _, _) <- get
   maybe
-    (throwError $ "Couldn't find Column encoding for column: " <> show ix)
+    (throwError . OrcException $ "Couldn't find Column encoding for column: " <> show ix)
     pure
     (currentValue ix)
 
@@ -310,35 +317,35 @@ decodeColumnPart typs rows = do
         popStream
       bits <-
         Storable.take (fromIntegral rows) <$>
-          liftEither (decodeBits dataBytes)
+          liftEitherString (decodeBits dataBytes)
 
       return $ Bool bits
 
     (BYTE, _) -> do
       dataBytes <- popStream
-      bytes     <- liftEither (decodeBytes dataBytes)
+      bytes     <- liftEitherString (decodeBytes dataBytes)
       return $ Byte bytes
 
     (SHORT, enc) -> do
       dataBytes <- popStream
-      Short <$> liftEither (decodeIntegerRLEversion enc dataBytes)
+      Short <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
     (INT, enc) -> do
       dataBytes <- popStream
-      Integer <$> liftEither (decodeIntegerRLEversion enc dataBytes)
+      Integer <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
     (LONG, enc) -> do
       dataBytes <- popStream
-      Long <$> liftEither (decodeIntegerRLEversion enc dataBytes)
+      Long <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
     (FLOAT, _) -> do
       dataBytes <- popStream
-      floats    <- liftEither (decodeFloat32 dataBytes)
+      floats    <- liftEitherString (decodeFloat32 dataBytes)
       return $ Float floats
 
     (DOUBLE, _) -> do
       dataBytes <- popStream
-      doubles   <- liftEither (decodeFloat64 dataBytes)
+      doubles   <- liftEitherString (decodeFloat64 dataBytes)
       return $ Double doubles
 
     (STRING, encoding) ->
@@ -353,8 +360,8 @@ decodeColumnPart typs rows = do
     (DECIMAL, enc) -> do
       dataBytes  <- popStream
       scaleBytes <- popStream
-      words      <- liftEither (decodeBase128Varint dataBytes)
-      scale      <- liftEither (decodeIntegerRLEversion enc scaleBytes)
+      words      <- liftEitherString (decodeBase128Varint dataBytes)
+      scale      <- liftEitherString (decodeIntegerRLEversion enc scaleBytes)
 
       return $ Decimal words scale
 
@@ -362,14 +369,14 @@ decodeColumnPart typs rows = do
       secondsBytes <- popStream
       nanoBytes    <- popStream
 
-      seconds      <- liftEither (decodeIntegerRLEversion enc secondsBytes)
-      nanos        <- liftEither (decodeIntegerRLEversion enc nanoBytes)
+      seconds      <- liftEitherString (decodeIntegerRLEversion enc secondsBytes)
+      nanos        <- liftEitherString (decodeIntegerRLEversion enc nanoBytes)
 
       return $ Timestamp seconds (Storable.map decodeNanoseconds nanos)
 
     (DATE, enc) -> do
       dataBytes <- popStream
-      Date <$> liftEither (decodeIntegerRLEversion enc dataBytes)
+      Date <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
     (BINARY, encoding) ->
       Binary <$> decodeString encoding
@@ -383,7 +390,7 @@ decodeColumnPart typs rows = do
         popStream
 
       tags <-
-        liftEither $
+        liftEitherString $
           decodeBytes tagBytes
 
       nestedColumn $
@@ -395,7 +402,7 @@ decodeColumnPart typs rows = do
         popStream
 
       lengths <-
-        liftEither (decodeIntegerRLEversion enc lengthBytes)
+        liftEitherString (decodeIntegerRLEversion enc lengthBytes)
 
       let
         nestedRows = Storable.sum (Storable.map fromIntegral lengths)
@@ -409,7 +416,7 @@ decodeColumnPart typs rows = do
         popStream
 
       lengths <-
-        liftEither (decodeIntegerRLEversion enc lengthBytes)
+        liftEitherString (decodeIntegerRLEversion enc lengthBytes)
 
       let
         nestedRows = Storable.sum (Storable.map fromIntegral lengths)
@@ -455,7 +462,7 @@ decodeStringDirect decodeIntegerFunc = do
   dataBytes   <- popStream
   lengthBytes <- popStream
   lengths <-
-    liftEither (decodeIntegerFunc lengthBytes)
+    liftEitherString (decodeIntegerFunc lengthBytes)
 
   return $!
     bytesOfSegmented $!
@@ -473,10 +480,10 @@ decodeStringDictionary decodeIntegerFunc = do
   mDictionaryBytes <- popOptionalStream SK_DICTIONARY_DATA
 
   selections <-
-    liftEither (decodeIntegerFunc dataBytes)
+    liftEitherString (decodeIntegerFunc dataBytes)
 
   lengths <-
-    liftEither (decodeIntegerFunc (fromMaybe ByteString.empty mLengthBytes))
+    liftEitherString (decodeIntegerFunc (fromMaybe ByteString.empty mLengthBytes))
 
   let
     dictionary =
@@ -520,14 +527,14 @@ liftMaybe =
 -- * -------------------
 
 
-putOrcFile
+putOrcFileLifted
   :: MonadTransIO t
   => Maybe Type
   -> Maybe CompressionKind
   -> FilePath
   -> Streaming.Stream (Of Column) (t IO) ()
   -> t IO ()
-putOrcFile expectedType mCmprssn file column =
+putOrcFileLifted expectedType mCmprssn file column =
   Base.withBinaryFileLifted file WriteMode $ \handle -> do
     runReaderT ? mCmprssn $
       ByteStream.toHandle handle $
@@ -535,15 +542,24 @@ putOrcFile expectedType mCmprssn file column =
           Streaming.hoist lift column
 
 {-# SPECIALIZE
-  putOrcFile
+  putOrcFileLifted
     :: Maybe Type
     -> Maybe CompressionKind
     -> FilePath
-    -> Streaming.Stream (Of Column) (EitherT String IO) ()
-    -> EitherT String IO () #-}
+    -> Streaming.Stream (Of Column) (EitherT OrcException IO) ()
+    -> EitherT OrcException IO () #-}
 
 
-putOrcStream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) m () -> ByteStream m ()
+{-# SPECIALIZE
+  putOrcFileLifted
+    :: Maybe Type
+    -> Maybe CompressionKind
+    -> FilePath
+    -> Streaming.Stream (Of Column) (Raising IO) ()
+    -> Raising IO () #-}
+
+
+putOrcStream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) m () -> ByteStream m ()
 putOrcStream expectedType tableStream = do
   "ORC"
 
@@ -552,7 +568,7 @@ putOrcStream expectedType tableStream = do
 
   ft <-
     lift $ maybe
-      (throwError "No type information could be gathered from the stream and no default was given.")
+      (throwError (OrcException "No type information could be gathered from the stream and no default was given."))
       pure t
 
   footerLen :> () <-
@@ -589,7 +605,7 @@ putOrcStream expectedType tableStream = do
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
 
-putTable :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => (Word64, [StripeInformation], Maybe Type) -> Column -> ByteStream m (Word64, [StripeInformation], Maybe Type)
+putTable :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => (Word64, [StripeInformation], Maybe Type) -> Column -> ByteStream m (Word64, [StripeInformation], Maybe Type)
 putTable (start, sis, startingType) column = do
   let numRows = Striped.length column
 
@@ -602,7 +618,7 @@ putTable (start, sis, startingType) column = do
   for_ startingType $ \st ->
     unless (st == typ) $
       lift $
-        throwError ("Type of stripe wasn't expected. Expected " <> show st <> ", Stripe: " <> show typ)
+        throwError (OrcException $ "Type of stripe wasn't expected. Expected " <> show st <> ", Stripe: " <> show typ)
 
   (lenF :> ()) <-
     put_stream $
@@ -656,12 +672,12 @@ simpleEncoding colEncKind =
   fullEncoding (Orc.ColumnEncoding colEncKind Nothing)
 
 
-putColumn :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
+putColumn :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumn col =
   putColumnPart col <* lift incColumn
 
 
-putColumnPart :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
+putColumnPart :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => Column -> ByteStream (StateT StripeState m) Type
 putColumnPart = \case
   Bool bits   -> do
     simpleEncoding DIRECT
@@ -778,7 +794,7 @@ putColumnPart = \case
 
 
 putStringColumn
-  :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m)
+  :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m)
   => Boxed.Vector ByteString
   -> ByteStream (StateT StripeState m) ()
 putStringColumn strs =
@@ -821,7 +837,7 @@ putStringColumn strs =
 
 
 putDirectColumn
-  :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m)
+  :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m)
   => Boxed.Vector ByteString
   -> ByteStream (StateT StripeState m) ()
 putDirectColumn strs = do
@@ -832,7 +848,7 @@ putDirectColumn strs = do
 
 
 putDictionaryColumn
-  :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m)
+  :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m)
   => Storable.Vector Word64
   -> Boxed.Vector ByteString
   -> ByteStream (StateT StripeState m) ()
@@ -843,19 +859,19 @@ putDictionaryColumn indicies dictionary = do
   put_data_stream SK_DICTIONARY_DATA $ for_ dictionary Put.putByteString
 
 
-put_data_stream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => StreamKind -> PutM a -> ByteStream (StateT StripeState m) a
+put_data_stream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => StreamKind -> PutM a -> ByteStream (StateT StripeState m) a
 put_data_stream sk p = do
   (len :> a)  <- put_stream p
   record (\ix -> Stream (Just sk) (Just ix) (Just len))
   return a
 
 
-put_stream :: (MonadReader (Maybe CompressionKind) m, MonadError String m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
+put_stream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
 put_stream p = do
   streamingLength . ByteStream.mwrap $ do
     cmprssn     <- ask
     strict :> a <- ByteStream.toStrict (streamingPut p )
-    blah        <- liftEither $ writeCompressedStream cmprssn strict
+    blah        <- liftEitherString $ writeCompressedStream cmprssn strict
     return $ ByteStream.toStreamingByteString blah $> a
 
 

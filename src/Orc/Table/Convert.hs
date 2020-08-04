@@ -17,7 +17,7 @@ module Orc.Table.Convert (
 
 import           Control.Arrow ((&&&))
 import           Control.Monad.Primitive (PrimMonad)
-import           Control.Monad.Trans.Either (runEitherT, newEitherT, hoistEither)
+import           Control.Monad.Trans.Either (runEitherT, newEitherT, hoistEither, EitherT)
 import           Control.Monad.Except (MonadError, liftEither)
 
 import           Streaming (Of (..))
@@ -25,6 +25,8 @@ import qualified Streaming as Streaming
 import qualified Streaming.Internal as Streaming
 import qualified Streaming.Prelude as Streaming
 
+import           Orc.Exception.Raising (Raising (..))
+import           Orc.Exception.Type (OrcException (..))
 import qualified Orc.Data.Time as Orc
 import           Orc.Schema.Types as Orc
 
@@ -38,7 +40,6 @@ import           Orc.Prelude
 
 import qualified Data.Maybe as Maybe
 import qualified Data.Scientific as Scientific
-import           Data.String (String)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector.Storable as Storable
 
@@ -48,6 +49,18 @@ streamLogical :: PrimMonad m => Streaming.Stream (Of Striped.Column) m r -> Stre
 streamLogical ss =
   Streaming.for ss
     streamSingle
+
+
+{-# SPECIALIZE
+  streamLogical
+    :: Streaming.Stream (Of Striped.Column) (EitherT OrcException IO) x
+    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) x  #-}
+
+
+{-# SPECIALIZE
+  streamLogical
+    :: Streaming.Stream (Of Striped.Column) (Raising IO) x
+    -> Streaming.Stream (Of Logical.Row) (Raising IO) x  #-}
 
 
 -- | Stream rows from a striped table
@@ -182,7 +195,7 @@ eachStorable =
 
 
 streamFromLogical
-  :: (Monad m, MonadError String m)
+  :: (Monad m, MonadError OrcException m)
   => Int
   -- ^ Stripe size in number of rows
   -> Type
@@ -195,9 +208,24 @@ streamFromLogical chunkSize schema =
     Streaming.mapped (Streaming.toList) .
       Streaming.chunksOf chunkSize
 
+{-# SPECIALIZE
+  streamFromLogical
+    :: Int
+    -> Type
+    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) x
+    -> Streaming.Stream (Of Striped.Column) (EitherT OrcException IO) x #-}
 
 
-fromLogical :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
+{-# SPECIALIZE
+  streamFromLogical
+    :: Int
+    -> Type
+    -> Streaming.Stream (Of Logical.Row) (Raising IO) x
+    -> Streaming.Stream (Of Striped.Column) (Raising IO) x #-}
+
+
+
+fromLogical :: Type -> Boxed.Vector Logical.Row -> Either OrcException Striped.Column
 fromLogical schema rows = do
   let
     partials = fmap takePartials rows
@@ -212,64 +240,64 @@ fromLogical schema rows = do
       Striped.Partial (Storable.convert ps) ms
 
 
-fromLogical' :: Type -> Boxed.Vector Logical.Row -> Either String Striped.Column
+fromLogical' :: Type -> Boxed.Vector Logical.Row -> Either OrcException Striped.Column
 fromLogical' schema rows =
   case schema of
     BOOLEAN ->
-      note "Data corruption. Expected Bool" $
+      note (OrcException "Data corruption. Expected Bool") $
       Striped.Bool . Boxed.convert <$>
         traverse takeBool rows
     BYTE ->
-      note "Data corruption. Expected Bytes" $
+      note (OrcException "Data corruption. Expected Bytes") $
       Striped.Byte . Boxed.convert <$>
         traverse takeByte rows
     SHORT ->
-      note "Data corruption. Expected Short" $
+      note (OrcException "Data corruption. Expected Short") $
       Striped.Short . Boxed.convert <$>
         traverse takeShort rows
     INT ->
-      note "Data corruption. Expected Integer" $
+      note (OrcException "Data corruption. Expected Integer") $
       Striped.Integer . Boxed.convert <$>
         traverse takeInteger rows
     LONG ->
-      note "Data corruption. Expected Long" $
+      note (OrcException "Data corruption. Expected Long") $
       Striped.Long . Boxed.convert <$>
         traverse takeLong rows
     DATE ->
-      note "Data corruption. Expected Date" $
+      note (OrcException "Data corruption. Expected Date") $
       Striped.Date . Boxed.convert <$>
         traverse takeDate rows
     FLOAT ->
-      note "Data corruption. Expected Float" $
+      note (OrcException "Data corruption. Expected Float") $
       Striped.Float . Boxed.convert <$>
         traverse takeFloat rows
     DOUBLE ->
-      note "Data corruption. Expected Double" $
+      note (OrcException "Data corruption. Expected Double") $
       Striped.Double . Boxed.convert <$>
         traverse takeDouble rows
 
     STRING ->
-      note "Data corruption. Expected String" $
+      note (OrcException "Data corruption. Expected String") $
       Striped.String <$>
         traverse takeString rows
 
     CHAR ->
-      note "Data corruption. Expected Char" $
+      note (OrcException "Data corruption. Expected Char") $
       Striped.Char <$>
         traverse takeChar rows
 
     VARCHAR ->
-      note "Data corruption. Expected VarChar" $
+      note (OrcException "Data corruption. Expected VarChar") $
       Striped.VarChar <$>
         traverse takeVarChar rows
 
     BINARY ->
-      note "Data corruption. Expected Binary" $
+      note (OrcException "Data corruption. Expected Binary") $
       Striped.Binary <$>
         traverse takeBinary rows
 
     STRUCT fts -> do
-      rows_  <- note "Data corruption. Expected " $ traverse takeAnonymousStruct rows
+      rows_  <- note (OrcException "Data corruption. Expected Struct") $ traverse takeAnonymousStruct rows
       let
         vfts  = Boxed.fromList fts
         cols0 = transpose rows_
@@ -284,7 +312,7 @@ fromLogical' schema rows =
         Striped.Struct cols
 
     LIST t -> do
-      rows_  <- note "Data corruption. Expected List" $ traverse takeList rows
+      rows_  <- note (OrcException "Data corruption. Expected List") $ traverse takeList rows
       let
         lens  = Boxed.convert $ fmap (fromIntegral . Boxed.length) rows_
       ls0    <- fromLogical t (Boxed.concat (Boxed.toList rows_))
@@ -292,7 +320,7 @@ fromLogical' schema rows =
         Striped.List lens ls0
 
     MAP kt vt -> do
-      rows_  <- note "Data corruption. Expected Map" $ traverse takeMap rows
+      rows_  <- note (OrcException "Data corruption. Expected Map") $ traverse takeMap rows
       let
         ks    = fmap (fmap fst) rows_
         vs    = fmap (fmap snd) rows_
@@ -303,7 +331,7 @@ fromLogical' schema rows =
         Striped.Map lens ks0 vs0
 
     UNION innerTypes -> do
-      rows_  <- note "Data corruption. Expected Union" $ traverse takeUnion rows
+      rows_  <- note (OrcException "Data corruption. Expected Union") $ traverse takeUnion rows
       let
         tags  = Boxed.convert $ fmap fst rows_
 
@@ -316,7 +344,7 @@ fromLogical' schema rows =
         Striped.Union tags (Boxed.fromList inners)
 
     TIMESTAMP -> do
-      rows_  <- note "Data corruption. Expected Union" $ traverse takeTimestamp rows
+      rows_  <- note (OrcException "Data corruption. Expected Union") $ traverse takeTimestamp rows
       let
         unTS (Orc.Timestamp seconds nanos) = (seconds, nanos)
 
@@ -328,7 +356,7 @@ fromLogical' schema rows =
             rows_
 
     DECIMAL -> do
-      rows_  <- note "Data corruption. Expected List" $ traverse takeDecimal rows
+      rows_  <- note (OrcException "Data corruption. Expected List") $ traverse takeDecimal rows
       let
         toStripeDecimal scientific =
           (fromInteger $ Scientific.coefficient scientific, negate (fromIntegral $ Scientific.base10Exponent scientific))

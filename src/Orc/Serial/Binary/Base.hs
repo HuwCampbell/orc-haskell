@@ -7,7 +7,7 @@
 {-# LANGUAGE ConstraintKinds     #-}
 
 module Orc.Serial.Binary.Base (
-    withOrcFile
+    withOrcFileLifted
   , checkOrcFile
 
   -- * Internal
@@ -15,6 +15,9 @@ module Orc.Serial.Binary.Base (
   , checkMagic
 
   , MonadTransIO
+  , OrcException (..)
+  , Raising (..)
+  , liftEitherString
 ) where
 
 import           Control.Monad.IO.Class
@@ -22,11 +25,14 @@ import           Control.Monad.Primitive (PrimMonad)
 
 import           Control.Monad.Except (MonadError, liftEither)
 import           Control.Monad.Trans.Control (MonadTransControl (..))
+import           Control.Monad.Trans.Either (EitherT)
 
 import qualified Data.Serialize.Get as Get
 
 import           Data.String (String)
 import qualified Data.ByteString as ByteString
+
+import           Orc.Exception.Raising
 
 import           Orc.Schema.Types as Orc
 
@@ -38,7 +44,24 @@ import           System.IO as IO
 import           Orc.Prelude
 
 
-type MonadTransIO t = (MonadError String (t IO), MonadIO (t IO), PrimMonad (t IO), MonadTransControl t)
+-- | Top type synonym for reading and writing ORC files.
+--
+--   Essentially, we can use any Monad transformer over IO, but, we need to have some way of handing errors
+--   in the ORC file.
+--
+--   There are essentially only two instances which make sense, an `EitherT OrcException m`, and the custom
+--   `@Raising@ m` type from "Orc.Exception.Raising".
+type MonadTransIO t = (MonadError OrcException (t IO), MonadIO (t IO), PrimMonad (t IO), MonadTransControl t)
+
+
+liftEitherWith :: MonadError e m => (b -> e) -> Either b a -> m a
+liftEitherWith f =
+  liftEither . first f
+
+
+liftEitherString ::  MonadError OrcException m => Either String a -> m a
+liftEitherString =
+  liftEitherWith OrcException
 
 
 withBinaryFileLifted
@@ -52,22 +75,33 @@ withBinaryFileLifted file mode action =
     restoreT . return
 
 
-withOrcFile
+withOrcFileLifted
   :: MonadTransIO t
   => FilePath -> ((Handle, PostScript, Footer) -> t IO r) -> t IO r
-withOrcFile file action =
+withOrcFileLifted file action =
   withBinaryFileLifted file ReadMode $ \handle -> do
     (postScript, footer) <-
       checkMagic handle
 
     action (handle, postScript, footer)
 
+{-# SPECIALIZE
+  withOrcFileLifted
+    :: FilePath
+    -> ((Handle, PostScript, Footer) -> EitherT OrcException IO r)
+    -> EitherT OrcException IO r #-}
+
+{-# SPECIALIZE
+  withOrcFileLifted
+    :: FilePath
+    -> ((Handle, PostScript, Footer) -> Raising IO r)
+    -> Raising IO r #-}
 
 checkOrcFile
   :: MonadTransIO t
   => FilePath -> t IO ([StripeInformation], Type, Maybe CompressionKind)
 checkOrcFile file =
-  withOrcFile file $ \(_, postScript, footer) -> do
+  withOrcFileLifted file $ \(_, postScript, footer) -> do
     let
       stripeInfos =
         stripes footer
@@ -87,7 +121,7 @@ checkMagic handle = do
   header <- liftIO (ByteString.hGet handle 3)
 
   unless (header == "ORC") $
-    liftEither (Left "Invalid header - probably not an ORC file.")
+    liftEitherString (Left "Invalid header - probably not an ORC file.")
 
   -- Seek to the last byte of the file to get the
   -- size of the postscript.
@@ -95,13 +129,13 @@ checkMagic handle = do
     hSeek handle SeekFromEnd (-1)
 
   psLength <-
-    liftEither . Get.runGet Get.getWord8 =<< liftIO (ByteString.hGet handle 1)
+    liftEitherString . Get.runGet Get.getWord8 =<< liftIO (ByteString.hGet handle 1)
 
   liftIO $
     hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength)
 
   postScript <-
-    liftEither . readPostScript =<< liftIO (ByteString.hGet handle $ fromIntegral psLength)
+    liftEitherString . readPostScript =<< liftIO (ByteString.hGet handle $ fromIntegral psLength)
 
   let
     compressionInfo =
@@ -114,10 +148,10 @@ checkMagic handle = do
     hSeek handle SeekFromEnd (negate $ 1 + fromIntegral psLength + fromIntegral footerLen)
 
   footerData <-
-    liftEither . readCompressedStream compressionInfo =<< liftIO (ByteString.hGet handle $ fromIntegral footerLen)
+    liftEitherString . readCompressedStream compressionInfo =<< liftIO (ByteString.hGet handle $ fromIntegral footerLen)
 
   footer <-
-    liftEither $ readFooter footerData
+   liftEitherString $ readFooter footerData
 
   liftIO $
     hSeek handle AbsoluteSeek 3

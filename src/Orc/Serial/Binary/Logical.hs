@@ -6,16 +6,24 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {- | Streaming of ORC files as 'Logical.Row'.
 
+     This module provides two separate mechanisms for dealing with
+     invalid Orc files.
+
+     To stream entirely in IO, one can just use @withOrcFile@ and
+     @putOrcFile@
 -}
 module Orc.Serial.Binary.Logical (
+  -- * IO interface
     withOrcFile
   , putOrcFile
+
+  -- * lifted interface
   , printOrcFile
+  , withOrcFileLifted
+  , putOrcFileLifted
 ) where
 
 import           Control.Monad.Trans.Either (EitherT)
-
-import           Data.String (String)
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
@@ -23,7 +31,7 @@ import qualified Streaming.Prelude as Streaming
 import qualified Data.ByteString.Streaming as ByteStream
 
 import           Orc.Schema.Types
-import           Orc.Serial.Binary.Base (MonadTransIO)
+import           Orc.Serial.Binary.Base (MonadTransIO, OrcException, Raising (..))
 import qualified Orc.Serial.Binary.Striped as Striped
 import           Orc.Serial.Json.Logical
 
@@ -38,31 +46,55 @@ import           Orc.Prelude
 --
 --   This is the most useful way to read an ORC file, and entails streaming
 --   each row individually. If speed is key, one may wish to use the function
---   'Striped.withOrcFile' from "Orc.Serial.Binary.Striped" and do a predicate
+--   'Striped.withOrcFileLifted' from "Orc.Serial.Binary.Striped" and do a predicate
 --   pushdown first.
 --
 --   This function is lifted to a constrained 'MonadTransControl' type,
 --   for IO and error reporting, which is further specialized to
---   @EitherT String IO@.
-withOrcFile
+--   @EitherT OrcException IO@, and @Raising IO@.
+withOrcFileLifted
   :: MonadTransIO t
   => FilePath
   -- ^ The ORC file to open
   -> (Type -> (Streaming.Stream (Of Logical.Row) (t IO) ()) -> t IO r)
   -- ^ How to consume the stream of values as a continuation
   -> t IO r
-withOrcFile fs action =
-  Striped.withOrcFile fs $ \typ ->
+withOrcFileLifted fs action =
+  Striped.withOrcFileLifted fs $ \typ ->
     action typ .
       streamLogical .
         Streaming.map snd
 
+
 {-# SPECIALIZE
-  withOrcFile
+  withOrcFileLifted
     :: FilePath
-    -> (Type -> (Streaming.Stream (Of Logical.Row) (EitherT String IO) ())
-    -> EitherT String IO r)
-    -> EitherT String IO r #-}
+    -> (Type -> (Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) ())
+    -> EitherT OrcException IO r)
+    -> EitherT OrcException IO r #-}
+
+{-# SPECIALIZE
+  withOrcFileLifted
+    :: FilePath
+    -> (Type -> (Streaming.Stream (Of Logical.Row) (Raising IO) ())
+    -> Raising IO r)
+    -> Raising IO r #-}
+
+
+-- | Open an ORC file and stream its values values as logical rows.
+--
+--   Throws an OrcException if there is an issue with the file.
+withOrcFile
+  :: FilePath
+  -- ^ The ORC file to open
+  -> (Type -> (Streaming.Stream (Of Logical.Row) IO ()) -> IO r)
+  -- ^ How to consume the stream of values as a continuation
+  -> IO r
+withOrcFile fs action =
+  unRaising $
+    withOrcFileLifted fs $ \t s ->
+      Raising . action t $
+        Streaming.hoist unRaising s
 
 
 -- | Simple pretty printer of ORC to JSON.
@@ -71,7 +103,7 @@ withOrcFile fs action =
 --   do something useful with it, as well as a way to easily
 --   pass an ORC file into @jq@ or a similar tool for ad-hoc
 --   processing.
-printOrcFile :: FilePath -> EitherT String IO ()
+printOrcFile :: FilePath -> IO ()
 printOrcFile fp = do
   withOrcFile fp $ \_ ->
     ByteStream.stdout
@@ -84,8 +116,8 @@ printOrcFile fp = do
 --
 --   This function is lifted to a constrained 'MonadTransControl' type,
 --   for IO and error reporting, which is further specialized to
---   @EitherT String IO@.
-putOrcFile
+--   @EitherT OrcException IO@, and @Raising IO@.
+putOrcFileLifted
   :: MonadTransIO t
   => Type
   -- ^ The types of the 'Logical.Row'
@@ -98,15 +130,44 @@ putOrcFile
   -> Streaming.Stream (Of Logical.Row) (t IO) ()
   -- ^ The stream of 'Logical.Row' to write
   -> t IO ()
-putOrcFile typ mCompression chunkSize fp =
-  Striped.putOrcFile (Just typ) mCompression fp .
+putOrcFileLifted typ mCompression chunkSize fp =
+  Striped.putOrcFileLifted (Just typ) mCompression fp .
     streamFromLogical chunkSize typ
 
 {-# SPECIALIZE
-  putOrcFile
+  putOrcFileLifted
     :: Type
     -> Maybe CompressionKind
     -> Int
     -> FilePath
-    -> Streaming.Stream (Of Logical.Row) (EitherT String IO) ()
-    -> EitherT String IO () #-}
+    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) ()
+    -> EitherT OrcException IO () #-}
+
+
+{-# SPECIALIZE
+  putOrcFileLifted
+    :: Type
+    -> Maybe CompressionKind
+    -> Int
+    -> FilePath
+    -> Streaming.Stream (Of Logical.Row) (Raising IO) ()
+    -> Raising IO () #-}
+
+
+-- | Write a stream of values as an ORC file.
+putOrcFile
+  :: Type
+  -- ^ The types of the 'Logical.Row'
+  -> Maybe CompressionKind
+  -- ^ An optional compression standard to use
+  -> Int
+  -- ^ The number of rows in each stripe
+  -> FilePath
+  -- ^ The filepath to write to
+  -> Streaming.Stream (Of Logical.Row) IO ()
+  -- ^ The stream of 'Logical.Row' to write
+  -> IO ()
+putOrcFile typ mCompression chunkSize fp s =
+  unRaising $
+    putOrcFileLifted typ mCompression chunkSize fp $
+      Streaming.hoist Raising s

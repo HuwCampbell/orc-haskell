@@ -55,7 +55,7 @@ genCompressionKind =
 
 prop_types_roundtrip_protobuf :: Property
 prop_types_roundtrip_protobuf =
-  property $ do
+  withTests 1000 . property $ do
     typ <- forAll genType
     tripping typ toProtoTypes fromProtoTypes
 
