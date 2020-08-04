@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DataKinds     #-}
-{-# LANGUAGE LambdaCase    #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 
 module Orc.Serial.Protobuf.Schema (
     readPostScript
@@ -35,7 +36,7 @@ import           Data.Foldable (foldl')
 import           Data.ProtocolBuffers
 import           Data.Traversable (for)
 
-import           Control.Monad.Trans.State (state, runState)
+import           Control.Monad.Trans.State (StateT (..))
 
 import qualified Data.Serialize.Get as Get
 import qualified Data.Serialize.Put as Put
@@ -153,90 +154,87 @@ toStripeInformation raw =
 
 
 fromProtoTypes :: [Proto.Type] -> Either String Type
-fromProtoTypes typs
-  | null typs
-  = Left "Can't parse no types to a type. This is probably a protobuf error"
-  | otherwise
-  = let
-      (typ, leftovers) =
-        fromTypesContinuation typs
-    in
-    if null leftovers then
-      Right typ
-    else
-      Left $ "Leftovers! Coundn't parse " <> show typs <> "\n\n\nLeftovers: " <> show leftovers
+fromProtoTypes typs = do
+  (typ, leftovers)  <-
+    fromTypesContinuation typs
+
+  if null leftovers then
+    Right typ
+  else
+    Left $ "Leftovers! Coundn't parse " <> show typs <> "\n\n\nLeftovers: " <> show leftovers
 
     where
 
-  fromTypesContinuation :: [Proto.Type] -> (Type, [Proto.Type])
+  fromTypesContinuation :: [Proto.Type] -> Either String (Type, [Proto.Type])
   fromTypesContinuation [] =
-    (BOOLEAN, [])
+    Left "Required a protobuf type to parse. This is probably a protobuf error"
   fromTypesContinuation (t:ts) =
     case getField (Proto.kind t) of
       Proto.BOOLEAN ->
-        (BOOLEAN, ts)
+        Right (BOOLEAN, ts)
       Proto.BYTE ->
-        (BYTE, ts)
+        Right (BYTE, ts)
       Proto.SHORT ->
-        (SHORT, ts)
+        Right (SHORT, ts)
       Proto.INT ->
-        (INT, ts)
+        Right (INT, ts)
       Proto.LONG ->
-        (LONG, ts)
+        Right (LONG, ts)
       Proto.FLOAT ->
-        (FLOAT, ts)
+        Right (FLOAT, ts)
       Proto.DOUBLE ->
-        (DOUBLE, ts)
+        Right (DOUBLE, ts)
       Proto.STRING ->
-        (STRING, ts)
+        Right (STRING, ts)
       Proto.BINARY ->
-        (BINARY, ts)
+        Right (BINARY, ts)
       Proto.TIMESTAMP ->
-        (TIMESTAMP, ts)
+        Right (TIMESTAMP, ts)
       Proto.DECIMAL ->
-        (DECIMAL, ts)
+        Right (DECIMAL, ts)
       Proto.DATE ->
-        (DATE, ts)
+        Right (DATE, ts)
       Proto.VARCHAR ->
-        (VARCHAR, ts)
+        Right (VARCHAR, ts)
       Proto.CHAR ->
-        (CHAR, ts)
+        Right (CHAR, ts)
 
-      Proto.LIST ->
-        let
-          (tx, rest) =
-            fromTypesContinuation ts
-        in
+      Proto.LIST -> do
+        (tx, rest) <-
+          fromTypesContinuation ts
+        return
           (LIST tx, rest)
-      Proto.MAP ->
-        let
-          (kx, k'rest) =
-            fromTypesContinuation ts
-          (vx, v'rest) =
-            fromTypesContinuation k'rest
-        in
+      Proto.MAP -> do
+        (kx, k'rest) <-
+          fromTypesContinuation ts
+        (vx, v'rest) <-
+          fromTypesContinuation k'rest
+        return
           (MAP kx vx, v'rest)
-      Proto.STRUCT ->
+
+      Proto.STRUCT -> do
         let
           fs =
             getField (Proto.fieldNames t)
 
-          (fields, rest) =
-            runState
-              (for fs $ \f -> StructField (StructFieldName f) <$> state fromTypesContinuation)
-              ts
-        in
+        (fields, rest) <-
+          runStateT
+            (for fs $ \f -> StructField (StructFieldName f) <$> StateT fromTypesContinuation)
+            ts
+        return
           (STRUCT fields, rest)
-      Proto.UNION ->
+
+      Proto.UNION -> do
         let
           us =
             getField (Proto.subtypes t)
 
-          (fields, rest) =
-            runState
-              (for us $ \_ -> state fromTypesContinuation)
-              ts
-        in
+        (fields, rest) <-
+          runStateT
+            (for us $ \_ -> StateT fromTypesContinuation)
+            ts
+
+        return
           (UNION fields, rest)
 
 
@@ -356,7 +354,6 @@ toRowIndexEntry raw =
     (mempty)
 
 
-
 readRowIndex :: ByteString -> Either String RowIndex
 readRowIndex bytes =
   fromRowIndex <$> Get.runGet decodeMessage bytes
@@ -405,7 +402,6 @@ toProtoStripeFooter hydrated =
     (putField $ writerTimezone hydrated)
 
 
-
 fromProtoStreamKind :: Proto.StreamKind -> StreamKind
 fromProtoStreamKind = \case
   Proto.SK_PRESENT -> SK_PRESENT
@@ -417,6 +413,7 @@ fromProtoStreamKind = \case
   Proto.SK_ROW_INDEX -> SK_ROW_INDEX
   Proto.SK_BLOOM_FILTER -> SK_BLOOM_FILTER
 
+
 toProtoStreamKind :: StreamKind -> Proto.StreamKind
 toProtoStreamKind = \case
   SK_PRESENT -> Proto.SK_PRESENT
@@ -427,7 +424,6 @@ toProtoStreamKind = \case
   SK_SECONDARY -> Proto.SK_SECONDARY
   SK_ROW_INDEX -> Proto.SK_ROW_INDEX
   SK_BLOOM_FILTER -> Proto.SK_BLOOM_FILTER
-
 
 
 fromProtoStream :: Proto.Stream -> Stream
@@ -444,7 +440,6 @@ toProtoStream raw =
     (putField $ fmap toProtoStreamKind $ streamKind raw)
     (putField $ streamColumn raw)
     (putField $ streamLength raw)
-
 
 
 fromProtoColumnEncodingKind :: Proto.ColumnEncodingKind -> ColumnEncodingKind
