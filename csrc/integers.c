@@ -89,7 +89,7 @@ uint64_t write_int##SIZE##_rle (const uint64_t length, const INT(SIZE) * input, 
     INT(SIZE) runvalue     = *(input++);                                                  \
     uint8_t   litsize      = 1;                                                           \
     uint16_t  runsize      = 0;                                                           \
-    INT(SIZE) lastmatches  = 0;                                                           \
+    INT(SIZE) runstep      = 0;                                                           \
     INT(SIZE) towrite      = 0;                                                           \
     uint8_t   writesize    = put_var_int##SIZE##_t (runvalue, writehead);                   \
     writehead += writesize;                                                               \
@@ -103,15 +103,15 @@ uint64_t write_int##SIZE##_rle (const uint64_t length, const INT(SIZE) * input, 
       cb[litsize % 3] = writesize;                                                        \
       litsize++;                                                                          \
                                                                                           \
-      if (litsize >= 3 && lastmatches <= 127 && lastmatches >= -128 && lastmatches == towrite - runvalue) { \
+      if (litsize >= 3 && runstep <= 127 && runstep >= -128 && runstep == towrite - runvalue) { \
         runsize    = 3;                                                                   \
         litsize   -= runsize;                                                             \
         writehead -= cb[0] + cb[1] + cb[2];                                               \
-        runvalue  -= lastmatches;                                                         \
+        runvalue  -= runstep;                                                             \
         break;                                                                            \
       }                                                                                   \
                                                                                           \
-      lastmatches = towrite - runvalue;                                                   \
+      runstep = towrite - runvalue;                                                       \
       runvalue = towrite;                                                                 \
     }                                                                                     \
                                                                                           \
@@ -125,7 +125,7 @@ uint64_t write_int##SIZE##_rle (const uint64_t length, const INT(SIZE) * input, 
     if (runsize > 0) {                                                                    \
       while (runsize + written < length && runsize < 130) {                               \
         uint8_t next = *input;                                                            \
-        if (next != towrite + lastmatches)                                                \
+        if (next != towrite + runstep)                                                    \
           break;                                                                          \
                                                                                           \
         towrite = next;                                                                   \
@@ -134,8 +134,8 @@ uint64_t write_int##SIZE##_rle (const uint64_t length, const INT(SIZE) * input, 
       }                                                                                   \
                                                                                           \
       *(writehead++) = (uint8_t) (runsize - 3);                                           \
-      *(writehead++) = (uint8_t) lastmatches;                                             \
-      writehead += put_var_int##SIZE##_t (runvalue, writehead);                                   \
+      *(writehead++) = (uint8_t) runstep;                                                 \
+      writehead += put_var_int##SIZE##_t (runvalue, writehead);                           \
       written += runsize;                                                                 \
     }                                                                                     \
   }                                                                                       \
@@ -159,29 +159,29 @@ uint64_t write_uint##SIZE##_rle (const uint64_t length, const WORD(SIZE) * input
     WORD(SIZE) runvalue     = *(input++);                                                 \
     uint8_t    litsize      = 1;                                                          \
     uint16_t   runsize      = 0;                                                          \
-    INT(SIZE)  lastmatches  = 0;                                                          \
+    INT(SIZE)  runstep      = 0;                                                          \
     WORD(SIZE) towrite      = 0;                                                          \
-    uint8_t    writesize    = put_var_uint##SIZE##_t (runvalue, writehead);                \
+    uint8_t    writesize    = put_var_uint##SIZE##_t (runvalue, writehead);               \
     writehead += writesize;                                                               \
                                                                                           \
     cb[0] = writesize;                                                                    \
                                                                                           \
     while (litsize < 128 && litsize + written < length) {                                 \
       towrite = *(input++);                                                               \
-      writesize = put_var_uint##SIZE##_t (towrite, writehead);                              \
+      writesize = put_var_uint##SIZE##_t (towrite, writehead);                            \
       writehead += writesize;                                                             \
       cb[litsize % 3] = writesize;                                                        \
       litsize++;                                                                          \
                                                                                           \
-      if (litsize >= 3 && lastmatches <= 127 && lastmatches >= -128 && lastmatches == towrite - runvalue) { \
+      if (litsize >= 3 && runstep <= 127 && runstep >= -128 && runstep == towrite - runvalue) { \
         runsize    = 3;                                                                   \
         litsize   -= runsize;                                                             \
         writehead -= cb[0] + cb[1] + cb[2];                                               \
-        runvalue  -= lastmatches;                                                         \
+        runvalue  -= runstep;                                                             \
         break;                                                                            \
       }                                                                                   \
                                                                                           \
-      lastmatches = towrite - runvalue;                                                   \
+      runstep = towrite - runvalue;                                                       \
       runvalue = towrite;                                                                 \
     }                                                                                     \
                                                                                           \
@@ -195,7 +195,7 @@ uint64_t write_uint##SIZE##_rle (const uint64_t length, const WORD(SIZE) * input
     if (runsize > 0) {                                                                    \
       while (runsize + written < length && runsize < 130) {                               \
         uint8_t next = *input;                                                            \
-        if (next != towrite + lastmatches)                                                \
+        if (next != towrite + runstep)                                                    \
           break;                                                                          \
                                                                                           \
         towrite = next;                                                                   \
@@ -204,7 +204,7 @@ uint64_t write_uint##SIZE##_rle (const uint64_t length, const WORD(SIZE) * input
       }                                                                                   \
                                                                                           \
       *(writehead++) = (uint8_t) (runsize - 3);                                           \
-      *(writehead++) = (uint8_t) lastmatches;                                             \
+      *(writehead++) = (uint8_t) runstep;                                                 \
       writehead += put_var_uint##SIZE##_t (runvalue, writehead);                          \
       written += runsize;                                                                 \
     }                                                                                     \

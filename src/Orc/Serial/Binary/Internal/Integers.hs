@@ -513,7 +513,6 @@ decodeIntegerRLEv2 :: forall w . OrcNum w => ByteString ->  Either String (Stora
 decodeIntegerRLEv2 =
   Get.runGet getIntegerRLEv2
 
-
 {-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int8) #-}
 {-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int16) #-}
 {-# SPECIALIZE getIntegerRLEv2 :: Get (Storable.Vector Int32) #-}
