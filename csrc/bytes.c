@@ -59,7 +59,7 @@ uint64_t write_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* o
     uint8_t* headerpos    = writehead++;
     uint8_t  runvalue     = *(input++);
     uint8_t  litsize      = 1;
-    uint8_t  runsize      = 0;
+    uint16_t runsize      = 0;
     uint8_t  lastmatches  = 0;
 
     *(writehead++) = runvalue;
@@ -88,7 +88,7 @@ uint64_t write_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* o
     }
 
     if (runsize > 0) {
-      while (runsize + written < length && runsize < 128) {
+      while (runsize + written < length && runsize < 130) {
         uint8_t next = *input;
         if (next != runvalue)
           break;
@@ -97,7 +97,7 @@ uint64_t write_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* o
         input++;
       }
 
-      *(writehead++) = runsize - 3;
+      *(writehead++) = (uint8_t) (runsize - 3);
       *(writehead++) = runvalue;
       written += runsize;
     }

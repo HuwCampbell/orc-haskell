@@ -52,6 +52,13 @@ prop_roundtrip_bytes_write_native =
     tripping (Storable.fromList x) encodeBytesNative decodeBytes
 
 
+prop_roundtrip_bytes_native_repeats :: Property
+prop_roundtrip_bytes_native_repeats =
+  withTests 1000 . property $ do
+    x <- forAll $ Gen.word8 (Range.linearFrom 0 0 maxBound)
+    y <- forAll $ Gen.int (Range.linear 0 1000)
+    tripping (Storable.replicate y x) encodeBytesNative decodeBytes
+
 
 prop_roundtrip_boolean_bits :: Property
 prop_roundtrip_boolean_bits =
