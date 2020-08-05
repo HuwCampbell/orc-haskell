@@ -94,9 +94,11 @@ library
 
   includes:
                        bytes.h
+                       integers.h
 
   c-sources:
                        csrc/bytes.c
+                       csrc/integers.c
 
 
 executable main
@@ -126,7 +128,7 @@ benchmark bench
   main-is:              bench.hs
 
   ghc-options:
-    -Wall -threaded     -O0 -rtsopts
+    -Wall -O2
 
   build-depends:
                        base

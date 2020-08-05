@@ -40,6 +40,11 @@ main =
       , bench "complex" $ whnf (Put.runPut . putIntegerRLEv1) exampleComplex
       ]
 
+    , bgroup "putIntegerRLEv1 word8" [
+        bench "haskell" $ whnf (Put.runPut . putIntegerRLEv1) bytesUnencoded
+      , bench "native"  $ whnf putIntegerRLEv1_word8_native bytesUnencoded
+      ]
+
     , bgroup "decode bytes" [
         bench "haskell" $ whnf decodeBytes bytesComplex
       , bench "native"  $ whnf (decodeBytesNative 16) bytesComplex

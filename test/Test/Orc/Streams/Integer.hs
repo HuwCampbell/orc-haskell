@@ -54,6 +54,75 @@ prop_roundtrip_integer_rle_v1_int64 =
     tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
 
 
+prop_roundtrip_integer_rle_v1_native_int8 :: Property
+prop_roundtrip_integer_rle_v1_native_int8 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.int8 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (putIntegerRLEv1_int8_native) decodeIntegerRLEv1
+
+prop_roundtrip_integer_rle_v1_native_int32 :: Property
+prop_roundtrip_integer_rle_v1_native_int32 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.int32 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (putIntegerRLEv1_int32_native) decodeIntegerRLEv1
+
+prop_roundtrip_integer_rle_v1_native_int16 :: Property
+prop_roundtrip_integer_rle_v1_native_int16 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.int16 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (putIntegerRLEv1_int16_native) decodeIntegerRLEv1
+
+prop_roundtrip_integer_rle_v1_native_int64 :: Property
+prop_roundtrip_integer_rle_v1_native_int64 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.int64 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (putIntegerRLEv1_int64_native) decodeIntegerRLEv1
+
+
+prop_roundtrip_integer_rle_v1_native_word8 :: Property
+prop_roundtrip_integer_rle_v1_native_word8 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.word8 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (putIntegerRLEv1_word8_native) decodeIntegerRLEv1
+
+
+prop_roundtrip_integer_rle_v1_native_word32 :: Property
+prop_roundtrip_integer_rle_v1_native_word32 =
+  withTests 1000 . property $ do
+    xs <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.word32 (Range.linearFrom 0 minBound maxBound))
+
+    tripping (Storable.fromList xs) (putIntegerRLEv1_word32_native) decodeIntegerRLEv1
+
+
 prop_spec_repeat_integer_rle_v1 :: Property
 prop_spec_repeat_integer_rle_v1 =
   withTests 1 . property $ do

@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns             #-}
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DoAndIfThenElse          #-}
 {-# LANGUAGE NoImplicitPrelude        #-}
 {-# LANGUAGE ScopedTypeVariables      #-}
@@ -14,12 +15,20 @@ module Orc.Serial.Binary.Internal.Integers (
   , putFloat32
   , putFloat64
 
-
   , decodeIntegerRLEv1
   , decodeBase128Varint
 
   , getBase128Varint
   , putBase128Varint
+
+  , putIntegerRLEv1_word8_native
+  , putIntegerRLEv1_word16_native
+  , putIntegerRLEv1_word32_native
+  , putIntegerRLEv1_word64_native
+  , putIntegerRLEv1_int8_native
+  , putIntegerRLEv1_int16_native
+  , putIntegerRLEv1_int32_native
+  , putIntegerRLEv1_int64_native
 
   , getIntegerRLEv1
   , putIntegerRLEv1
@@ -162,17 +171,7 @@ putBase128Varint =
   in
     go . zigZag
 
-{-# SPECIALIZE putBase128Varint :: Putter Int8 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Int16 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Int32 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Int64 #-}
 {-# SPECIALIZE putBase128Varint :: Putter Int128 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Word8 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Word16 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Word32 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Word64 #-}
-{-# SPECIALIZE putBase128Varint :: Putter Word128 #-}
-
 
 {-# INLINE decodeIntegerRLEv1 #-}
 decodeIntegerRLEv1 :: forall w . OrcNum w => ByteString -> Either String (Storable.Vector w)
@@ -206,6 +205,232 @@ getIntegerRLEv1 =
     Storable.concat <$>
       many getSet
 
+{-# INLINE putIntegerRLEv1_word8_native #-}
+putIntegerRLEv1_word8_native :: Storable.Vector Word8 -> ByteString
+putIntegerRLEv1_word8_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 2
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_uint8_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_uint8_rle
+    :: Int64 -> Ptr Word8 -> Ptr Word8 -> IO Int64
+
+
+{-# INLINE putIntegerRLEv1_word16_native #-}
+putIntegerRLEv1_word16_native :: Storable.Vector Word16 -> ByteString
+putIntegerRLEv1_word16_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 3
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_uint16_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_uint16_rle
+    :: Int64 -> Ptr Word16 -> Ptr Word8 -> IO Int64
+
+{-# INLINE putIntegerRLEv1_word32_native #-}
+putIntegerRLEv1_word32_native :: Storable.Vector Word32 -> ByteString
+putIntegerRLEv1_word32_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 5
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_uint32_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_uint32_rle
+    :: Int64 -> Ptr Word32 -> Ptr Word8 -> IO Int64
+
+{-# INLINE putIntegerRLEv1_word64_native #-}
+putIntegerRLEv1_word64_native :: Storable.Vector Word64 -> ByteString
+putIntegerRLEv1_word64_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 10
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_uint64_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_uint64_rle
+    :: Int64 -> Ptr Word64 -> Ptr Word8 -> IO Int64
+
+{-# INLINE putIntegerRLEv1_int8_native #-}
+putIntegerRLEv1_int8_native :: Storable.Vector Int8 -> ByteString
+putIntegerRLEv1_int8_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 2
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_int8_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_int8_rle
+    :: Int64 -> Ptr Int8 -> Ptr Word8 -> IO Int64
+
+
+
+{-# INLINE putIntegerRLEv1_int16_native #-}
+putIntegerRLEv1_int16_native :: Storable.Vector Int16 -> ByteString
+putIntegerRLEv1_int16_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 3
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_int16_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_int16_rle
+    :: Int64 -> Ptr Int16 -> Ptr Word8 -> IO Int64
+
+{-# INLINE putIntegerRLEv1_int32_native #-}
+putIntegerRLEv1_int32_native :: Storable.Vector Int32 -> ByteString
+putIntegerRLEv1_int32_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 5
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_int32_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_int32_rle
+    :: Int64 -> Ptr Int32 -> Ptr Word8 -> IO Int64
+
+{-# INLINE putIntegerRLEv1_int64_native #-}
+putIntegerRLEv1_int64_native :: Storable.Vector Int64 -> ByteString
+putIntegerRLEv1_int64_native bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+      len =
+        Storable.length bytes
+      fsize
+        = 10
+      maxSize =
+        1 + fsize * len
+
+    outPtr <-
+      ByteString.mallocByteString maxSize
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_int64_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+foreign import ccall unsafe
+  write_int64_rle
+    :: Int64 -> Ptr Int64 -> Ptr Word8 -> IO Int64
 
 putIntegerRLEv1 :: forall w . OrcNum w => Putter (Storable.Vector w)
 putIntegerRLEv1 =
@@ -273,14 +498,15 @@ putIntegerRLEv1 =
   in
     putSet
 
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int8) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int16) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int32) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Int64) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word8) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word16) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word32) #-}
-{-# SPECIALIZE putIntegerRLEv1 :: Putter (Storable.Vector Word64) #-}
+{-# NOINLINE [1] putIntegerRLEv1 #-}
+{-# RULES "putIntegerRLEv1/Word8"  putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_word8_native  :: Putter (Storable.Vector Word8) #-}
+{-# RULES "putIntegerRLEv1/Word16" putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_word16_native :: Putter (Storable.Vector Word16) #-}
+{-# RULES "putIntegerRLEv1/Word32" putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_word32_native :: Putter (Storable.Vector Word32) #-}
+{-# RULES "putIntegerRLEv1/Word64" putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_word64_native :: Putter (Storable.Vector Word64) #-}
+{-# RULES "putIntegerRLEv1/Int8"   putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_int8_native   :: Putter (Storable.Vector Int8) #-}
+{-# RULES "putIntegerRLEv1/Int16"  putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_int16_native  :: Putter (Storable.Vector Int16) #-}
+{-# RULES "putIntegerRLEv1/Int32"  putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_int32_native  :: Putter (Storable.Vector Int32) #-}
+{-# RULES "putIntegerRLEv1/Int64"  putIntegerRLEv1 = Put.putByteString . putIntegerRLEv1_int64_native  :: Putter (Storable.Vector Int64) #-}
 
 {-# INLINE decodeIntegerRLEv2 #-}
 decodeIntegerRLEv2 :: forall w . OrcNum w => ByteString ->  Either String (Storable.Vector w)
