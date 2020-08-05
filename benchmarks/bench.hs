@@ -5,7 +5,7 @@ import           Criterion
 import           Criterion.Main
 
 import           Data.ByteString (ByteString)
-import           Data.Word (Word32)
+import           Data.Word (Word8, Word32)
 import qualified Data.Serialize.Put as Put
 
 import qualified Data.Vector.Storable as Storable
@@ -24,10 +24,13 @@ exampleComplex =
   Storable.fromList [1,1,1,3,3,4,5,6,6,6,6,7,7,8,8,8]
 
 
+bytesUnencoded :: Storable.Vector Word8
+bytesUnencoded =
+  Storable.fromList [1,1,1,3,3,4,5,6,6,6,6,7,7,8,8,8]
+
 bytesComplex :: ByteString
 bytesComplex =
-  encodeBytes $
-    Storable.fromList [1,1,1,3,3,4,5,6,6,6,6,7,7,8,8,8]
+  encodeBytes bytesUnencoded
 
 main :: IO ()
 main =
@@ -40,5 +43,10 @@ main =
     , bgroup "decode bytes" [
         bench "haskell" $ whnf decodeBytes bytesComplex
       , bench "native"  $ whnf (decodeBytesNative 16) bytesComplex
+      ]
+
+    , bgroup "encode bytes" [
+        bench "haskell" $ whnf encodeBytes       bytesUnencoded
+      , bench "native"  $ whnf encodeBytesNative bytesUnencoded
       ]
     ]

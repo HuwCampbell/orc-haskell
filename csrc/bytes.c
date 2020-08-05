@@ -40,13 +40,72 @@ void read_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* output
       read   += runLength;
     } else {
       // Negation is taking the 2's complement.
-      int8_t listLength = ~header + 1;
+      uint8_t listLength = ~header + 1;
       memcpy(output, input, listLength);
       input  += listLength;
       output += listLength;
       read   += listLength;
     }
   }
+}
+
+
+uint64_t write_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* output) {
+  uint64_t written   = 0;
+  uint8_t* writehead = output;
+
+  // Pessimistically write literals; then backtrack to write on runs.
+  while (written < length) {
+    uint8_t* headerpos    = writehead++;
+    uint8_t  runvalue     = *(input++);
+    uint8_t  litsize      = 1;
+    uint8_t  lastmatches  = 0;
+
+    *(writehead++) = runvalue;
+
+    while (litsize < 128 && litsize + written < length) {
+      uint8_t towrite = *(input++);
+      *(writehead++) = towrite;
+      litsize++;
+
+      if (lastmatches && towrite == runvalue) {
+        if (litsize > 3) {
+          litsize -= 3;
+          *headerpos = ~litsize + 1;
+          written   += litsize;
+          writehead -= 3;
+        } else {
+          writehead = headerpos;
+        }
+        goto run;
+      }
+
+      lastmatches = runvalue == towrite;
+      runvalue = towrite;
+    }
+
+    *headerpos = ~litsize + 1;
+    written += litsize;
+    continue;
+
+run:
+    litsize = 3;
+    while (litsize + written < length && litsize < 128) {
+      uint8_t next = *input;
+      uint8_t lastmatches = (next == runvalue);
+      if (lastmatches) {
+        litsize += 1;
+        input++;
+      } else {
+        break;
+      }
+    }
+
+    *(writehead++) = litsize - 3;
+    *(writehead++) = runvalue;
+    written += litsize;
+  }
+  return (writehead - output);
 }
 
 
@@ -79,77 +138,3 @@ uint64_t readLongs(const uint8_t *data_input, uint64_t len, uint64_t bitSize, ui
 
   return ret;
 }
-
-// void write_bytes_rle(const uint64_t length, const int8_t* input, int8_t* output) {
-//   uint64_t written = 0;
-//   int8_t potential_run_start = input;
-//   int8_t potential_run_end = input;
-//   int8_t potential_run = *input;
-//   while (written < length) {
-//     int8_t header = *input;
-//     input++;
-//   }
-// }
-
-// Map bit length i to closest aligned fixed bit width that can contain i bits.
-// const uint8_t ClosestAlignedFixedBitsMap[65] = {
-//     1, 1, 2, 4, 4, 8, 8, 8, 8, 16, 16, 16, 16, 16, 16, 16, 16, 24, 24, 24, 24, 24, 24, 24, 24,
-//     32, 32, 32, 32, 32, 32, 32, 32,
-//     40, 40, 40, 40, 40, 40, 40, 40,
-//     48, 48, 48, 48, 48, 48, 48, 48,
-//     56, 56, 56, 56, 56, 56, 56, 56,
-//     64, 64, 64, 64, 64, 64, 64, 64
-// };
-
-// inline uint32_t getClosestAlignedFixedBits(uint32_t n) {
-//   if (n <= 64) {
-//     return ClosestAlignedFixedBitsMap[n];
-//   } else {
-//     return 64;
-//   }
-// }
-
-// void writeInts(int64_t* input, uint32_t offset, size_t len, uint32_t bitSize) {
-//   if(len < 1 || bitSize < 1) {
-//       return;
-//   }
-
-//   if (getClosestAlignedFixedBits(bitSize) == bitSize) {
-//     uint32_t numBytes;
-//     uint32_t endOffSet = (uint32_t) (offset + len);
-//     if (bitSize < 8 ) {;
-//       char bitMask = (char)((1 << bitSize) - 1);
-//       uint32_t numHops = 8 / bitSize;
-//       uint32_t remainder = (uint32_t)(len % numHops);
-//       uint32_t endUnroll = endOffSet - remainder;
-//       for (uint32_t i = offset; i < endUnroll; i+=numHops) {
-//         char toWrite = 0;
-//         for (uint32_t j = 0; j < numHops; ++j) {
-//           toWrite |= (char)((input[i+j] & bitMask) << (8 - (j + 1) * bitSize));
-//         }
-//         writeByte(toWrite);
-//       }
-
-//       if (remainder > 0) {
-//         uint32_t startShift = 8 - bitSize;
-//         char toWrite = 0;
-//         for (uint32_t i = endUnroll; i < endOffSet; ++i) {
-//           toWrite |= (char)((input[i] & bitMask) << startShift);
-//           startShift -= bitSize;
-//         }
-//         writeByte(toWrite);
-//       }
-
-//     } else {
-//       numBytes = bitSize / 8;
-
-//       for (uint32_t i = offset; i < endOffSet; ++i) {
-//         for (uint32_t j = 0; j < numBytes; ++j) {
-//           char toWrite = (char)((input[i] >> (8 * (numBytes - j - 1))) & 255);
-//           writeByte(toWrite);
-//         }
-//       }
-//     }
-
-//     return;
-//   }

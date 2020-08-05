@@ -143,6 +143,7 @@ getBase128Varint =
 putBase128Varint :: forall w. OrcNum w => Putter w
 putBase128Varint =
   let
+    go :: Putter (OrcWord w)
     go chunk = do
       let
         masked =

@@ -686,7 +686,7 @@ putColumnPart = \case
 
   Byte bytes -> do
     simpleEncoding DIRECT
-    put_data_stream SK_DATA $ putBytes bytes
+    put_data_stream SK_DATA $ putBytesNative bytes
     return BYTE
 
   Short shorts -> do
@@ -780,7 +780,7 @@ putColumnPart = \case
 
   Union tags inners -> do
     simpleEncoding DIRECT
-    put_data_stream SK_DATA $ putBytes tags
+    put_data_stream SK_DATA $ putBytesNative tags
     innerTypes <-
       nestedEncode $
         for inners putColumn

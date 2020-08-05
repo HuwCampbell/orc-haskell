@@ -12,10 +12,12 @@ module Orc.Serial.Binary.Internal.Bytes (
   , encodeBits
 
   , putBytes
+  , putBytesNative
   , putBits
 
   -- For Benchmarking
   , decodeBytesNative
+  , encodeBytesNative
 ) where
 
 import           Data.Bits (testBit, setBit)
@@ -59,9 +61,39 @@ decodeBytesNative len bytes =
     return $
       Storable.unsafeFromForeignPtr outPtr 0 (fromIntegral len)
 
+
+{-# INLINE putBytesNative #-}
+putBytesNative :: Putter (Storable.Vector Word8)
+putBytesNative = Put.putByteString . encodeBytesNative
+
+{-# INLINE encodeBytesNative #-}
+encodeBytesNative :: Storable.Vector Word8 -> ByteString
+encodeBytesNative bytes =
+  unsafePerformIO $ do
+    let
+      (inPtr, offset, _inLen) =
+        Storable.unsafeToForeignPtr bytes
+
+      len = Storable.length bytes
+
+    outPtr <-
+      ByteString.mallocByteString (len + len `div` 128)
+
+    reLen <- withForeignPtr inPtr $ \inPtr' ->
+      withForeignPtr outPtr $ \outPtr' ->
+        write_bytes_rle (fromIntegral len) (inPtr' `plusPtr` offset) outPtr'
+
+    return $
+      ByteString.fromForeignPtr outPtr 0 (fromIntegral reLen)
+
+
 foreign import ccall unsafe
   read_bytes_rle
     :: Int64 -> Ptr Word8 -> Ptr Word8 -> IO ()
+
+foreign import ccall unsafe
+  write_bytes_rle
+    :: Int64 -> Ptr Word8 -> Ptr Word8 -> IO Int64
 
 
 {-# INLINE decodeBytes #-}

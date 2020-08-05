@@ -28,8 +28,8 @@ prop_roundtrip_bytes =
     tripping (Storable.fromList x) encodeBytes decodeBytes
 
 
-prop_roundtrip_bytes_native :: Property
-prop_roundtrip_bytes_native =
+prop_roundtrip_bytes_read_native :: Property
+prop_roundtrip_bytes_read_native =
   withTests 1000 . property $ do
     x <-
       forAll $
@@ -38,6 +38,18 @@ prop_roundtrip_bytes_native =
           (Gen.word8 (Range.linearFrom 0 0 maxBound))
 
     tripping (Storable.fromList x) encodeBytes (Just . decodeBytesNative (fromIntegral $ length x))
+
+
+prop_roundtrip_bytes_write_native :: Property
+prop_roundtrip_bytes_write_native =
+  withTests 1000 . property $ do
+    x <-
+      forAll $
+        Gen.list
+          (Range.linear 0 1000)
+          (Gen.word8 (Range.linearFrom 0 0 maxBound))
+
+    tripping (Storable.fromList x) encodeBytesNative decodeBytes
 
 
 
