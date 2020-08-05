@@ -54,11 +54,12 @@ uint64_t write_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* o
   uint64_t written   = 0;
   uint8_t* writehead = output;
 
-  // Pessimistically write literals; then backtrack to write on runs.
+  // Pessimistically write literals until a run is found.
   while (written < length) {
     uint8_t* headerpos    = writehead++;
     uint8_t  runvalue     = *(input++);
     uint8_t  litsize      = 1;
+    uint8_t  runsize      = 0;
     uint8_t  lastmatches  = 0;
 
     *(writehead++) = runvalue;
@@ -69,41 +70,37 @@ uint64_t write_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* o
       litsize++;
 
       if (lastmatches && towrite == runvalue) {
-        if (litsize > 3) {
-          litsize -= 3;
-          *headerpos = ~litsize + 1;
-          written   += litsize;
-          writehead -= 3;
-        } else {
-          writehead = headerpos;
-        }
-        goto run;
+        runsize    = 3;
+        litsize   -= runsize;
+        writehead -= runsize;
+        break;
       }
 
       lastmatches = runvalue == towrite;
       runvalue = towrite;
     }
 
-    *headerpos = ~litsize + 1;
-    written += litsize;
-    continue;
-
-run:
-    litsize = 3;
-    while (litsize + written < length && litsize < 128) {
-      uint8_t next = *input;
-      uint8_t lastmatches = (next == runvalue);
-      if (lastmatches) {
-        litsize += 1;
-        input++;
-      } else {
-        break;
-      }
+    if (litsize > 0) {
+      *headerpos = ~litsize + 1;
+      written += litsize;
+    } else {
+      writehead = headerpos;
     }
 
-    *(writehead++) = litsize - 3;
-    *(writehead++) = runvalue;
-    written += litsize;
+    if (runsize > 0) {
+      while (runsize + written < length && runsize < 128) {
+        uint8_t next = *input;
+        if (next != runvalue)
+          break;
+
+        runsize++;
+        input++;
+      }
+
+      *(writehead++) = runsize - 3;
+      *(writehead++) = runvalue;
+      written += runsize;
+    }
   }
   return (writehead - output);
 }
