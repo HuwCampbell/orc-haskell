@@ -27,7 +27,6 @@ module Orc.Serial.Binary.Internal.Integers (
   , getIntegerRLEv2
   , decodeIntegerRLEv2
 
-  , powerOfTen
   , decodeNanoseconds
   , encodeNanoseconds
 ) where
@@ -552,12 +551,6 @@ bitSizeLookup =
   in
     \key ->
       table Storable.! fromIntegral key
-
-
-powerOfTen :: Integral i => i -> i -> Ratio i
-powerOfTen base power =
-  base % (10 ^ power)
-{-# INLINE powerOfTen #-}
 
 
 -- | Fixup a nanoseconds.

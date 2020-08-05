@@ -2,7 +2,7 @@
 #define __ORC_BYTES_H
 
 #include <stdint.h>
-#include <string.h>
+#include <strings.h>
 
 // ------------------------
 // Read Boolean Bytestring

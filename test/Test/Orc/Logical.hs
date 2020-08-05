@@ -102,8 +102,8 @@ prop_logical_tables_round_trip_via_stipes = withTests 1000 . property $ do
   typ     <- forAll $ genType
   classify "map"    $ isMap typ
   classify "list"   $ isList typ
-  classify "union"  $ isList typ
-  classify "struct" $ isList typ
+  classify "union"  $ isUnion typ
+  classify "struct" $ isStruct typ
 
   logical   <- forAll $ fromList <$> Gen.list (Range.linear 0 100) (genLogical typ)
   striped   <- evalEither $ Convert.fromLogical typ logical

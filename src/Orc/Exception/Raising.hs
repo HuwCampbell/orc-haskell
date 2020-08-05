@@ -31,7 +31,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl (..), MonadTransC
 import           Orc.Exception.Type
 import           Orc.Prelude
 
--- | A newtype over IO which acts as the identity transformer.
+-- | A transformer similar to the identity transformer.
 --
 --   This is used to provide MonadTransControl and an instance
 --   for throwing OrcExceptions.

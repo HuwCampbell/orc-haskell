@@ -47,8 +47,8 @@ runExceptT $
 Rows and tables are strongly typed into Haskell algebraic data
 types.
 
-Exceptions
-----------
+Error Handling
+--------------
 
 One can choose to explicitly handle errors in the Orc file with
 an `ExceptT` monad transformer, or throw exceptions.

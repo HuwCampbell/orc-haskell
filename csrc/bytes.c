@@ -39,9 +39,8 @@ void read_bytes_rle(const uint64_t length, const uint8_t* input, uint8_t* output
       output += runLength;
       read   += runLength;
     } else {
-      // List length
-      // "Negation" is 0 the top bit.
-      int8_t listLength = header & 0x7F;
+      // Negation is taking the 2's complement.
+      int8_t listLength = ~header + 1;
       memcpy(output, input, listLength);
       input  += listLength;
       output += listLength;
