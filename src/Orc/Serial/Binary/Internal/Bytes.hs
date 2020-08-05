@@ -74,10 +74,14 @@ encodeBytesNative bytes =
       (inPtr, offset, _inLen) =
         Storable.unsafeToForeignPtr bytes
 
-      len = Storable.length bytes
+      len =
+        Storable.length bytes
+
+      maxSize =
+        1 + len + len `div` 128
 
     outPtr <-
-      ByteString.mallocByteString (len + len `div` 128)
+      ByteString.mallocByteString maxSize
 
     reLen <- withForeignPtr inPtr $ \inPtr' ->
       withForeignPtr outPtr $ \outPtr' ->
