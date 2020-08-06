@@ -71,7 +71,7 @@ buildRow = \case
     let
       vals = mconcat . List.intersperse commaSpace . fmap buildMap . Boxed.toList
     in
-      Builder.char8 '{' <> vals rs <> Builder.char8 '}'
+      Builder.char8 '[' <> vals rs <> Builder.char8 ']'
 
   Bool b ->
     bool_ b
@@ -133,13 +133,18 @@ buildField (StructField (StructFieldName n) r) =
   text n <> colonSpace <> buildRow r
 
 
--- | Render a pair of rows as an object part.
+-- | Render a Map as a struct with Key and Value fields.
 --
---   This is a bit of an issue, as it won't yield perfect json if the
---   key is not stringly.
+-- It would be nice to use a json assoc, but there's no
+-- guarantee the key is stringly.
 buildMap :: (Row,Row) -> Builder.Builder
 buildMap (k, v) =
-  buildRow k <> colonSpace <> buildRow v
+  buildRow
+    $ Struct
+    $ Boxed.fromList [
+      StructField (StructFieldName "key") k
+    , StructField (StructFieldName "value") v
+    ]
 
 
 commaSpace :: Builder
