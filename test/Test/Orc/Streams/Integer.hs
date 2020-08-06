@@ -18,7 +18,7 @@ import           Orc.Prelude
 import           Prelude (minBound, maxBound)
 
 import           Orc.Serial.Binary.Internal.Integers
-
+import           Orc.Serial.Binary.Internal.Integers.Native
 
 prop_roundtrip_base128_varint :: Property
 prop_roundtrip_base128_varint =
@@ -39,7 +39,7 @@ prop_roundtrip_integer_rle_v1 =
           (Range.linear 0 1000)
           (Gen.word64 (Range.linearFrom 0 0 maxBound))
 
-    tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 
 prop_roundtrip_integer_rle_v1_int64 :: Property
@@ -51,7 +51,7 @@ prop_roundtrip_integer_rle_v1_int64 =
           (Range.linear 0 1000)
           (Gen.int64 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (Put.runPut . putIntegerRLEv1) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 
 prop_roundtrip_integer_rle_v1_native_int8 :: Property
@@ -63,7 +63,7 @@ prop_roundtrip_integer_rle_v1_native_int8 =
           (Range.linear 0 1000)
           (Gen.int8 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (putIntegerRLEv1_int8_native) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 prop_roundtrip_integer_rle_v1_native_int32 :: Property
 prop_roundtrip_integer_rle_v1_native_int32 =
@@ -74,7 +74,7 @@ prop_roundtrip_integer_rle_v1_native_int32 =
           (Range.linear 0 1000)
           (Gen.int32 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (putIntegerRLEv1_int32_native) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 prop_roundtrip_integer_rle_v1_native_int16 :: Property
 prop_roundtrip_integer_rle_v1_native_int16 =
@@ -85,7 +85,7 @@ prop_roundtrip_integer_rle_v1_native_int16 =
           (Range.linear 0 1000)
           (Gen.int16 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (putIntegerRLEv1_int16_native) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 prop_roundtrip_integer_rle_v1_native_int64 :: Property
 prop_roundtrip_integer_rle_v1_native_int64 =
@@ -96,7 +96,7 @@ prop_roundtrip_integer_rle_v1_native_int64 =
           (Range.linear 0 1000)
           (Gen.int64 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (putIntegerRLEv1_int64_native) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 
 prop_roundtrip_integer_rle_v1_native_word8 :: Property
@@ -108,7 +108,7 @@ prop_roundtrip_integer_rle_v1_native_word8 =
           (Range.linear 0 1000)
           (Gen.word8 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (putIntegerRLEv1_word8_native) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 
 prop_roundtrip_integer_rle_v1_native_word32 :: Property
@@ -120,7 +120,7 @@ prop_roundtrip_integer_rle_v1_native_word32 =
           (Range.linear 0 1000)
           (Gen.word32 (Range.linearFrom 0 minBound maxBound))
 
-    tripping (Storable.fromList xs) (putIntegerRLEv1_word32_native) decodeIntegerRLEv1
+    tripping (Storable.fromList xs) encodeIntegerRLEv1 decodeIntegerRLEv1
 
 
 prop_spec_repeat_integer_rle_v1 :: Property

@@ -47,6 +47,7 @@ library
                        Orc.Serial.Binary.Internal.Compression
                        Orc.Serial.Binary.Internal.Get
                        Orc.Serial.Binary.Internal.Integers
+                       Orc.Serial.Binary.Internal.Integers.Native
                        Orc.Serial.Binary.Internal.OrcNum
                        Orc.Serial.Binary.Internal.Put
 

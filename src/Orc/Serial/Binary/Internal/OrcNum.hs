@@ -11,7 +11,7 @@ module Orc.Serial.Binary.Internal.OrcNum (
   , unZigZag64
 ) where
 
-import           Data.Bits (Bits, shiftL, shiftR, xor, (.&.))
+import           Data.Bits (FiniteBits, shiftL, shiftR, xor, (.&.))
 import           Data.Word (Word8, Word16, Word32)
 import           Data.WideWord (Int128, Word128)
 
@@ -30,7 +30,7 @@ import           Orc.Prelude
 -- The potentially zigzag encoded natural number type is parameterised
 -- with the OrcWord associated type family.
 --
-class (Storable i, Bits (OrcWord i), Integral (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
+class (Storable i, FiniteBits (OrcWord i), Integral (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
   type OrcWord i :: *
   zigZag :: i -> OrcWord i
   unZigZag :: OrcWord i -> i
