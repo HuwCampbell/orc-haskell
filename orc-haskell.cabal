@@ -45,6 +45,7 @@ library
 
                        Orc.Serial.Binary.Internal.Bytes
                        Orc.Serial.Binary.Internal.Compression
+                       Orc.Serial.Binary.Internal.Floats
                        Orc.Serial.Binary.Internal.Get
                        Orc.Serial.Binary.Internal.Integers
                        Orc.Serial.Binary.Internal.Integers.Native
@@ -95,10 +96,12 @@ library
 
   includes:
                        bytes.h
+                       floats.h
                        integers.h
 
   c-sources:
                        csrc/bytes.c
+                       csrc/floats.c
                        csrc/integers.c
 
 
@@ -154,6 +157,7 @@ test-suite test
                        Test.Orc.Streams.Integer
                        Test.Orc.Type
                        Test.Orc.Logical
+                       Test.Orc.Memory.Leaks
 
   build-depends:
                        base                            >= 3          && < 5

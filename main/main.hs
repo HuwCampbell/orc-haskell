@@ -77,7 +77,8 @@ main = do
     Rewrite orcIn orcOut cmprssn ->
       Base.raisingOrcErrors $
         Striped.withOrcFileLifted orcIn $ \typ ->
-          Striped.putOrcFileLifted (Just typ) cmprssn orcOut . Streaming.map snd
+          Striped.putOrcFileLifted (Just typ) cmprssn orcOut .
+            Streaming.map snd
 
     RoundTrip orcIn orcOut cmprssn chunks ->
       Logical.withOrcFile orcIn $ \typ ->

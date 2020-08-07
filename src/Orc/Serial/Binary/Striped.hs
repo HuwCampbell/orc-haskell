@@ -47,6 +47,7 @@ import           Orc.Schema.Types as Orc
 import           Orc.Serial.Protobuf.Schema as Orc
 import           Orc.Serial.Binary.Internal.Bytes
 import           Orc.Serial.Binary.Internal.Compression
+import           Orc.Serial.Binary.Internal.Floats
 import           Orc.Serial.Binary.Internal.Integers
 import           Orc.Serial.Binary.Internal.OrcNum
 
@@ -295,7 +296,7 @@ currentEncoding = do
 --
 --   After we're done, increment the column index.
 decodeColumn :: MonadTransIO t => Type -> Word64 -> OrcDecode t IO Column
-decodeColumn typs rows =
+decodeColumn typs rows = {-# SCC "decodeColumn" #-}
   withPresence rows (decodeColumnPart typs) <* incrementColumn
 
 
@@ -303,7 +304,7 @@ decodeColumn typs rows =
 --
 --   The present column component has already been handled.
 decodeColumnPart :: MonadTransIO t => Type -> Word64 -> OrcDecode t IO Column
-decodeColumnPart typs rows = do
+decodeColumnPart typs rows = {-# SCC "decodeColumnPart" #-} do
   currentEncoding' <-
      currentEncoding
 
@@ -312,7 +313,7 @@ decodeColumnPart typs rows = do
       columnEncodingKind currentEncoding'
 
   case (typs, encodingKind) of
-    (BOOLEAN, _) -> do
+    (BOOLEAN, _) -> {-# SCC "decodeColumnPart/boolean" #-} do
       dataBytes <-
         popStream
       bits <-
@@ -321,43 +322,43 @@ decodeColumnPart typs rows = do
 
       return $ Bool bits
 
-    (BYTE, _) -> do
+    (BYTE, _) -> {-# SCC "decodeColumnPart/byte" #-} do
       dataBytes <- popStream
       bytes     <- liftEitherString (decodeBytes dataBytes)
       return $ Byte bytes
 
-    (SHORT, enc) -> do
+    (SHORT, enc) -> {-# SCC "decodeColumnPart/short" #-} do
       dataBytes <- popStream
       Short <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
-    (INT, enc) -> do
+    (INT, enc) -> {-# SCC "decodeColumnPart/int" #-} do
       dataBytes <- popStream
       Integer <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
-    (LONG, enc) -> do
+    (LONG, enc) -> {-# SCC "decodeColumnPart/long" #-} do
       dataBytes <- popStream
       Long <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
-    (FLOAT, _) -> do
+    (FLOAT, _) -> {-# SCC "decodeColumnPart/float" #-} do
       dataBytes <- popStream
-      floats    <- liftEitherString (decodeFloat32 dataBytes)
+      floats    <- liftEitherString (decodeFloat32 (w2i rows) dataBytes)
       return $ Float floats
 
-    (DOUBLE, _) -> do
+    (DOUBLE, _) -> {-# SCC "decodeColumnPart/double" #-} do
       dataBytes <- popStream
-      doubles   <- liftEitherString (decodeFloat64 dataBytes)
+      doubles   <- liftEitherString (decodeFloat64 (w2i rows) dataBytes)
       return $ Double doubles
 
-    (STRING, encoding) ->
+    (STRING, encoding) -> {-# SCC "decodeColumnPart/string" #-}
       String <$> decodeString encoding
 
-    (CHAR, encoding) ->
+    (CHAR, encoding) -> {-# SCC "decodeColumnPart/char" #-}
       Char <$> decodeString encoding
 
-    (VARCHAR, encoding) ->
+    (VARCHAR, encoding) -> {-# SCC "decodeColumnPart/varchar" #-}
       VarChar <$> decodeString encoding
 
-    (DECIMAL, enc) -> do
+    (DECIMAL, enc) -> {-# SCC "decodeColumnPart/decimal" #-} do
       dataBytes  <- popStream
       scaleBytes <- popStream
       words      <- liftEitherString (decodeBase128Varint dataBytes)
@@ -365,7 +366,7 @@ decodeColumnPart typs rows = do
 
       return $ Decimal words scale
 
-    (TIMESTAMP, enc) -> do
+    (TIMESTAMP, enc) -> {-# SCC "decodeColumnPart/timestamp" #-} do
       secondsBytes <- popStream
       nanoBytes    <- popStream
 
@@ -374,18 +375,18 @@ decodeColumnPart typs rows = do
 
       return $ Timestamp seconds (Storable.map decodeNanoseconds nanos)
 
-    (DATE, enc) -> do
+    (DATE, enc) -> {-# SCC "decodeColumnPart/date" #-} do
       dataBytes <- popStream
       Date <$> liftEitherString (decodeIntegerRLEversion enc dataBytes)
 
-    (BINARY, encoding) ->
+    (BINARY, encoding) -> {-# SCC "decodeColumnPart/binary" #-}
       Binary <$> decodeString encoding
 
-    (STRUCT fields, _) ->
+    (STRUCT fields, _) -> {-# SCC "decodeColumnPart/struct" #-}
       nestedColumn $
         decodeStruct rows fields
 
-    (UNION fields, _) -> do
+    (UNION fields, _) -> {-# SCC "decodeColumnPart/union" #-} do
       tagBytes <-
         popStream
 
@@ -397,7 +398,7 @@ decodeColumnPart typs rows = do
         Union tags . Boxed.fromList
           <$> ifor fields (\i f -> decodeColumn f (tagsRows i tags))
 
-    (LIST typ, enc) -> do
+    (LIST typ, enc) -> {-# SCC "decodeColumnPart/list" #-} do
       lengthBytes <-
         popStream
 
@@ -411,7 +412,7 @@ decodeColumnPart typs rows = do
         List lengths
           <$> decodeColumn typ nestedRows
 
-    (MAP keyTyp valTyp, enc) -> do
+    (MAP keyTyp valTyp, enc) -> {-# SCC "decodeColumnPart/map" #-} do
       lengthBytes <-
         popStream
 
@@ -515,7 +516,6 @@ tagsRows ix0 = do
     . Storable.filter (== ix)
 
 
-
 liftMaybe :: MonadError e m => e -> Maybe a -> m a
 liftMaybe =
   liftEither ... note
@@ -532,8 +532,8 @@ putOrcFileLifted
   => Maybe Type
   -> Maybe CompressionKind
   -> FilePath
-  -> Streaming.Stream (Of Column) (t IO) ()
-  -> t IO ()
+  -> Streaming.Stream (Of Column) (t IO) r
+  -> t IO r
 putOrcFileLifted expectedType mCmprssn file column =
   Base.withBinaryFileLifted file WriteMode $ \handle ->
     runReaderT ? mCmprssn $
@@ -559,11 +559,11 @@ putOrcFileLifted expectedType mCmprssn file column =
     -> Raising IO () #-}
 
 
-putOrcStream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) m () -> ByteStream m ()
+putOrcStream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => Maybe Type -> Streaming.Stream (Of Column) m r -> ByteStream m r
 putOrcStream expectedType tableStream = do
   "ORC"
 
-  (len, stripeInfos, t) :> () <-
+  (len, stripeInfos, t) :> r <-
     hyloByteStream putTable (3,[],expectedType) tableStream
 
   ft <-
@@ -601,6 +601,7 @@ putOrcStream expectedType tableStream = do
     Put.putWord8 $
       fromIntegral psLength
 
+  return r
 
 type StripeState = (Word32, [Orc.ColumnEncoding], [Orc.Stream])
 
@@ -868,16 +869,19 @@ put_data_stream sk p = do
 
 put_stream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
 put_stream p = do
-  streamingLength . ByteStream.mwrap $ do
-    cmprssn     <- ask
-    strict :> a <- ByteStream.toStrict (streamingPut p )
-    blah        <- liftEitherString $ writeCompressedStream cmprssn strict
-    return $ ByteStream.toStreamingByteString blah $> a
-
+ streamingLength . ByteStream.mwrap $ do
+   cmprssn     <- ask
+   strict :> a <- ByteStream.toStrict (streamingPut p )
+   blah        <- liftEitherString $ writeCompressedStream cmprssn strict
+   return $ ByteStream.toStreamingByteString blah $> a
 
 put_uncompressed_stream :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
 put_uncompressed_stream = streamingLength . streamingPut
 
+
+w2i :: Word64 -> Int
+w2i = fromIntegral
+{-# INLINE w2i #-}
 
 i2w32 :: Int -> Word32
 i2w32 = fromIntegral

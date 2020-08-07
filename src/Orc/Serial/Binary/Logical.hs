@@ -127,9 +127,9 @@ putOrcFileLifted
   -- ^ The number of rows in each stripe
   -> FilePath
   -- ^ The filepath to write to
-  -> Streaming.Stream (Of Logical.Row) (t IO) ()
+  -> Streaming.Stream (Of Logical.Row) (t IO) r
   -- ^ The stream of 'Logical.Row' to write
-  -> t IO ()
+  -> t IO r
 putOrcFileLifted typ mCompression chunkSize fp =
   Striped.putOrcFileLifted (Just typ) mCompression fp .
     streamFromLogical chunkSize typ

@@ -5,7 +5,10 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 module Test.Orc.Logical (
-  tests
+    tests
+
+  , genLogical
+  , genLogical'
 ) where
 
 import           Hedgehog

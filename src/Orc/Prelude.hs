@@ -72,6 +72,7 @@ module Orc.Prelude (
   , Either (..)
   , either
   , note
+  , note'
   -- ** Maybe
   , Maybe (..)
   , fromMaybe
@@ -349,6 +350,12 @@ note :: a -> Maybe b -> Either a b
 note a Nothing = Left a
 note _ (Just b) = Right b
 {-# INLINEABLE note #-}
+
+-- | Tag a 'Nothing'.
+note' :: a -> Maybe b -> Either a b
+note' a Nothing = Left a
+note' _ (Just b) = Right $! b
+{-# INLINEABLE note' #-}
 
 -- | Eliminate a 'Left'.
 hush :: Either a b -> Maybe b

@@ -200,9 +200,9 @@ streamFromLogical
   -- ^ Stripe size in number of rows
   -> Type
   -- ^ Type of records in the stream
-  -> Streaming.Stream (Of Logical.Row) m x
+  -> Streaming.Stream (Of Logical.Row) m r
   -- ^ Stream of typed records to write in ORC file
-  -> Streaming.Stream (Of Striped.Column) m x
+  -> Streaming.Stream (Of Striped.Column) m r
 streamFromLogical chunkSize schema =
   Streaming.mapM (liftEither . fromLogical schema . Boxed.fromList) .
     Streaming.mapped (Streaming.toList) .
@@ -212,16 +212,16 @@ streamFromLogical chunkSize schema =
   streamFromLogical
     :: Int
     -> Type
-    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) x
-    -> Streaming.Stream (Of Striped.Column) (EitherT OrcException IO) x #-}
+    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) r
+    -> Streaming.Stream (Of Striped.Column) (EitherT OrcException IO) r #-}
 
 
 {-# SPECIALIZE
   streamFromLogical
     :: Int
     -> Type
-    -> Streaming.Stream (Of Logical.Row) (Raising IO) x
-    -> Streaming.Stream (Of Striped.Column) (Raising IO) x #-}
+    -> Streaming.Stream (Of Logical.Row) (Raising IO) r
+    -> Streaming.Stream (Of Striped.Column) (Raising IO) r #-}
 
 
 

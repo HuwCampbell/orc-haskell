@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <strings.h>
 
-// ------------------------
-// Read Boolean Bytestring
-// ------------------------
+// -----------------------
+// Read Integer Bytestring
+// -----------------------
 
 uint64_t write_uint8_rle(const uint64_t length, const uint8_t* input, uint8_t* output);
 uint64_t write_uint16_rle(const uint64_t length, const uint16_t* input, uint8_t* output);
