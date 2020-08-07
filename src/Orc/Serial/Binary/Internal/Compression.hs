@@ -160,7 +160,7 @@ writeCompressedParts action uncompressed =
 
   in
     if lenCompressed < len then
-      let header = 2 * len
+      let header = 2 * lenCompressed
       in  Put.word24LE (fromIntegral header) <> Builder.byteString compressed
     else
       let header = 2 * len + 1

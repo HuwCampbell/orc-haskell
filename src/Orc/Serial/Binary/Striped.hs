@@ -591,7 +591,7 @@ putOrcStream expectedType tableStream = do
       putPostScript $
         PostScript
           (fromIntegral footerLen)
-          cmprssn
+          (cmprssn <|> Just NONE)
           Nothing
           [0,12]
           Nothing
@@ -874,6 +874,7 @@ put_stream p = do
    strict :> a <- ByteStream.toStrict (streamingPut p )
    blah        <- liftEitherString $ writeCompressedStream cmprssn strict
    return $ ByteStream.toStreamingByteString blah $> a
+
 
 put_uncompressed_stream :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)
 put_uncompressed_stream = streamingLength . streamingPut
