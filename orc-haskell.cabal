@@ -84,7 +84,6 @@ library
                      , vector
                      , wide-word
 
-                     , lzo
                      , zlib
                      , zstd
 
@@ -158,6 +157,7 @@ test-suite test
                        Test.Orc.Type
                        Test.Orc.Logical
                        Test.Orc.Memory.Leaks
+                       Test.Orc.Streaming
 
   build-depends:
                        base                            >= 3          && < 5
@@ -171,6 +171,7 @@ test-suite test
                      , mmorph
                      , resourcet
                      , streaming
+                     , streaming-bytestring
                      , temporary-resourcet
                      , transformers
                      , transformers-either

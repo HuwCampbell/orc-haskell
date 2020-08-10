@@ -869,11 +869,9 @@ put_data_stream sk p = do
 
 put_stream :: (MonadReader (Maybe CompressionKind) m, MonadError OrcException m, MonadIO m) => PutM a -> ByteStream m (Of Word64 a)
 put_stream p = do
- streamingLength . ByteStream.mwrap $ do
-   cmprssn     <- ask
-   strict :> a <- ByteStream.toStrict (streamingPut p )
-   blah        <- liftEitherString $ writeCompressedStream cmprssn strict
-   return $ ByteStream.toStreamingByteString blah $> a
+ streamingLength $ do
+   cmprssn     <- lift ask
+   writeCompressedStream cmprssn (streamingPut p)
 
 
 put_uncompressed_stream :: MonadIO m => PutM a -> ByteStream m (Of Word64 a)

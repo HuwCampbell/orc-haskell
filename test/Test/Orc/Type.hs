@@ -50,7 +50,7 @@ genType =
 
 genCompressionKind :: Gen (Maybe CompressionKind)
 genCompressionKind =
-  Gen.maybe (Gen.element [NONE, SNAPPY, ZLIB, ZSTD, LZO])
+  Gen.maybe (Gen.element [NONE, SNAPPY, ZLIB, ZSTD])
 
 
 prop_types_roundtrip_protobuf :: Property

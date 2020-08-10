@@ -9,10 +9,12 @@
 module Orc.X.Streaming (
     streamingLength
   , hyloByteStream
+  , hyloByteStream'
   , streamingPut
 
   , toVector
   , toVectorN
+  , resizeChunks
 ) where
 
 import           Orc.Prelude
@@ -22,13 +24,14 @@ import           Control.Monad.Primitive (PrimMonad)
 
 import           Data.Serialize.Put (PutM)
 import qualified Data.Serialize.Put as Put
+import qualified Data.List as List
 
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
 import qualified Streaming.Internal as Streaming
 
-import qualified Data.ByteString as ByteString
+import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Streaming as ByteStream
 import qualified Data.ByteString.Streaming.Internal as ByteStream
 
@@ -49,7 +52,7 @@ streamingLength =
         ByteStream.Empty (n :> r)
       ByteStream.Chunk s rest ->
         ByteStream.Chunk s $
-          go (n + fromIntegral (ByteString.length s)) rest
+          go (n + fromIntegral (Strict.length s)) rest
       ByteStream.Go act ->
         ByteStream.Go $
           fmap (go n) act
@@ -71,6 +74,23 @@ hyloByteStream step begin =
       Streaming.Step (a :> rest) -> do
         x' <- step x a
         loop x' rest
+
+
+hyloByteStream' :: Monad m => (a -> ByteStream m ()) -> Streaming.Stream (Of a) m r -> ByteStream m r
+hyloByteStream' step =
+    loop
+  where
+    loop = \case
+      Streaming.Return r ->
+        ByteStream.Empty r
+
+      Streaming.Effect m ->
+        ByteStream.mwrap $
+          loop <$> m
+
+      Streaming.Step (a :> rest) -> do
+        step a
+        loop rest
 
 
 streamingPut :: MonadIO m => PutM a -> ByteStream m a
@@ -111,3 +131,35 @@ toVector i s =
   in
     Streaming.foldM step begin done s
 {-# INLINABLE toVector #-}
+
+
+resizeChunks
+  :: MonadIO m
+  => Int
+  -> ByteStream m r -> Streaming.Stream (Of Strict.ByteString) m r
+resizeChunks maxSize =
+  loop (0, []) . ByteStream.toChunks
+    where
+  make =
+    Strict.concat . List.reverse
+
+  loop (n0,bss) incoming0 =
+    if n0 >= maxSize then
+      let
+        (emit, retain) =
+          Strict.splitAt maxSize (make bss)
+      in
+        Streaming.Step $
+          emit :> loop (Strict.length retain, [retain]) incoming0
+
+    else do
+      ex <- Streaming.lift $ Streaming.next incoming0
+      case ex of
+        Left r -> do
+          when (n0 /= 0 ) $
+            Streaming.yield (make bss)
+
+          pure r
+
+        Right (hd, tl) ->
+          loop (n0 + Strict.length hd, hd:bss) tl

@@ -3,6 +3,8 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE FlexibleContexts    #-}
 
 module Orc.Serial.Binary.Internal.Compression (
     readCompressedStream
@@ -10,16 +12,20 @@ module Orc.Serial.Binary.Internal.Compression (
 ) where
 
 import           Control.Exception (tryJust, evaluate)
+import           Control.Monad.Except (MonadError (..), throwError)
+import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Class (lift)
 
 import qualified Data.Serialize.Get as Get
 
 import           Data.String (String)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
-import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString.Streaming as Streaming
 
+import           Orc.Exception.Type
 import           Orc.Schema.Types as Orc
 import qualified Orc.Serial.Binary.Internal.Get as Get
 import qualified Orc.Serial.Binary.Internal.Put as Put
@@ -28,12 +34,12 @@ import           System.IO.Unsafe as Unsafe
 
 import qualified Snapper
 
-import qualified Codec.Compression.Lzo as Lzo
 import qualified Codec.Compression.Zlib.Raw as Zlib
 import           Codec.Compression.Zlib.Internal (DecompressError)
 import qualified Codec.Compression.Zstd as Zstd
 
 import           Orc.Prelude
+import           Orc.X.Streaming
 
 
 -- * Reading
@@ -52,7 +58,7 @@ readCompressedStream = \case
   Just ZSTD ->
     readZstdParts
   Just LZO ->
-    readLzoParts
+    const (Left "Unsupported Compression Kind LZO")
   Just LZ4 ->
     const (Left "Unsupported Compression Kind LZ4")
 
@@ -62,7 +68,7 @@ overLazy f =
   Lazy.toStrict . f . Lazy.fromStrict
 
 
-readCompressedParts :: (Int -> ByteString -> Either String ByteString) -> ByteString -> Either String ByteString
+readCompressedParts :: (ByteString -> Either String ByteString) -> ByteString -> Either String ByteString
 readCompressedParts action =
   go ByteString.empty
     where
@@ -81,21 +87,21 @@ readCompressedParts action =
 
     thisRound <-
       if isOriginal == 1 then pure pertinent else
-        action (fromIntegral len) pertinent
+        action pertinent
 
     go (acc <> thisRound) remaining
 
 
 readSnappyParts :: ByteString -> Either String ByteString
 readSnappyParts =
-  readCompressedParts $ \_ pertinent ->
+  readCompressedParts $ \pertinent ->
     note "Snappy decompression failed." $
       Snapper.decompress pertinent
 
 
 readZlibParts :: ByteString -> Either String ByteString
 readZlibParts =
-  readCompressedParts $ \_ pertinent ->
+  readCompressedParts $ \pertinent ->
     Unsafe.unsafePerformIO $
       tryJust
         (\(e :: DecompressError) -> Just ("DEFLATE decompression failed with " <> show e))
@@ -104,7 +110,7 @@ readZlibParts =
 
 readZstdParts :: ByteString -> Either String ByteString
 readZstdParts =
-  readCompressedParts $ \_ pertinent ->
+  readCompressedParts $ \pertinent ->
     case Zstd.decompress pertinent of
       Zstd.Decompress bs
         -> Right bs
@@ -114,67 +120,65 @@ readZstdParts =
         -> Left "Zstd skip encountered"
 
 
-readLzoParts :: ByteString -> Either String ByteString
-readLzoParts =
-  readCompressedParts $ \len pertinent ->
-    Unsafe.unsafePerformIO $
-      tryJust
-        (\(e :: DecompressError) -> Just ("DEFLATE decompression failed with " <> show e))
-        (evaluate $ Lzo.decompress pertinent len)
-
-
 -- * Writing
 
 
-writeCompressedStream :: Maybe CompressionKind -> ByteString -> Either String Builder
+writeCompressedStream
+  :: (MonadIO m, MonadError OrcException m)
+  => Maybe CompressionKind -> Streaming.ByteString m r -> Streaming.ByteString m r
 writeCompressedStream = \case
   Nothing ->
-    trivial
+    id
   Just NONE ->
-    trivial
+    id
   Just SNAPPY ->
-    Right . writeSnappyParts
+    writeSnappyParts
   Just ZLIB ->
-    Right . writeZlibParts
+    writeZlibParts
   Just ZSTD ->
-    Right . writeZstdParts
+    writeZstdParts
   Just LZO ->
-    Right . writeLzoParts
+    const $ lift (throwError (OrcException "Unsupported Compression Kind LZO"))
   Just LZ4 ->
-    const (Left "Unsupported Compression Kind LZ4")
-
-  where
-    trivial =
-      Right . Builder.byteString
+    const $ lift (throwError (OrcException "Unsupported Compression Kind LZ4"))
 
 
-writeCompressedParts :: (ByteString -> ByteString) -> ByteString -> Builder
-writeCompressedParts action uncompressed =
+writeCompressedParts
+  :: (MonadIO m, MonadError OrcException m)
+  => (ByteString -> ByteString) -> Streaming.ByteString m r -> Streaming.ByteString m r
+writeCompressedParts action =
   let
-    len =
-      ByteString.length uncompressed
-    compressed =
-      action uncompressed
-    lenCompressed =
-      ByteString.length compressed
+    go uncompressed =
+      let
+        len =
+          ByteString.length uncompressed
+        compressed =
+          action uncompressed
+        lenCompressed =
+          ByteString.length compressed
 
+      in Streaming.toStreamingByteString $
+        if lenCompressed < len then
+          let header = 2 * lenCompressed
+          in  Put.word24LE (fromIntegral header) <> Builder.byteString compressed
+        else
+          let header = 2 * len + 1
+          in  Put.word24LE (fromIntegral header) <> Builder.byteString uncompressed
   in
-    if lenCompressed < len then
-      let header = 2 * lenCompressed
-      in  Put.word24LE (fromIntegral header) <> Builder.byteString compressed
-    else
-      let header = 2 * len + 1
-      in  Put.word24LE (fromIntegral header) <> Builder.byteString uncompressed
+    hyloByteStream' go . resizeChunks 262144
 
 
-writeSnappyParts :: ByteString -> Builder
+writeSnappyParts
+  :: (MonadIO m, MonadError OrcException m)
+  => Streaming.ByteString m r -> Streaming.ByteString m r
 writeSnappyParts = writeCompressedParts Snapper.compress
 
-writeZlibParts :: ByteString -> Builder
+writeZlibParts
+  :: (MonadIO m, MonadError OrcException m)
+  => Streaming.ByteString m r -> Streaming.ByteString m r
 writeZlibParts = writeCompressedParts (overLazy Zlib.compress)
 
-writeZstdParts :: ByteString -> Builder
+writeZstdParts
+  :: (MonadIO m, MonadError OrcException m)
+  => Streaming.ByteString m r -> Streaming.ByteString m r
 writeZstdParts = writeCompressedParts (Zstd.compress Zstd.maxCLevel)
-
-writeLzoParts :: ByteString -> Builder
-writeLzoParts = writeCompressedParts (Lzo.compress)
