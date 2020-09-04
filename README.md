@@ -2,7 +2,7 @@ Optimised Row Columnar - Haskell
 ================================
 
 Orc is a native reader and writer for the apache
-(ORC)[https://orc.apache.org/] file format; supporting reading and
+[ORC](https://orc.apache.org/) file format; supporting reading and
 writing all types with snappy, lzo, zlib, and zstd compression
 standards (lz4 is currently not supported).
 
@@ -17,7 +17,7 @@ file, one would import `Orc.Logical` as `Logical` and use
 `Logical.withOrcFile`.
 
 The API is based around the
-(streaming)[http://hackage.haskell.org/package/streaming] library,
+[streaming](http://hackage.haskell.org/package/streaming) library,
 using a with pattern for resource handling. This means one can
 stream through an ORC file, consuming it as they please, and the
 library will take care of seeking to the correct locations and
