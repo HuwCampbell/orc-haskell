@@ -3,7 +3,7 @@ Optimised Row Columnar - Haskell
 
 Orc is a native reader and writer for the apache
 [ORC](https://orc.apache.org/) file format; supporting reading and
-writing all types with snappy, lzo, zlib, and zstd compression
+writing all types with snappy, zlib, and zstd compression
 standards (lz4 is currently not supported).
 
 We currently read both v0 and v1, and write with v0 direct encodings.
@@ -64,4 +64,4 @@ Tests
 Currently, we have property based round-tripping tests for Orc
 files, and golden tests for the examples from the ORC specification.
 All files from the examples given in the ORC repository work, (apart
-from the LZ4 encoded one).
+from the LZO and LZ4 encoded ones).

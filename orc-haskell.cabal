@@ -18,187 +18,202 @@ build-type:
   Configure
 extra-source-files:
   ChangeLog.md
+  configure
+  configure.ac
+  include/config.h.in
+
 cabal-version:
   >=1.10
 
-
 extra-tmp-files:
-                       autom4te.cache
-                       config.log
-                       config.status
-                       include/config.h
-                       include/snappy-stubs-public.h
+  autom4te.cache
+  config.log
+  config.status
+  include/config.h
+  include/snappy-stubs-public.h
 
 library
-  ghc-options:         -Wall
+  ghc-options:
+    -Wall
 
   exposed-modules:
-                       Orc.Logical
-                       Orc.Striped
+    Orc.Logical
+    Orc.Striped
 
-                       Orc.Data.Data
-                       Orc.Data.Segmented
-                       Orc.Data.Time
+    Orc.Data.Data
+    Orc.Data.Segmented
+    Orc.Data.Time
 
-                       Orc.Exception.Type
-                       Orc.Exception.Raising
+    Orc.Exception.Type
+    Orc.Exception.Raising
 
-                       Orc.Prelude
+    Orc.Prelude
 
-                       Orc.Schema.Types
+    Orc.Schema.Types
 
-                       Orc.Serial.Binary.Base
-                       Orc.Serial.Binary.Logical
-                       Orc.Serial.Binary.Striped
+    Orc.Serial.Binary.Base
+    Orc.Serial.Binary.Logical
+    Orc.Serial.Binary.Striped
 
-                       Orc.Serial.Binary.Internal.Bytes
-                       Orc.Serial.Binary.Internal.Compression
-                       Orc.Serial.Binary.Internal.Compression.Snappy
-                       Orc.Serial.Binary.Internal.Floats
-                       Orc.Serial.Binary.Internal.Get
-                       Orc.Serial.Binary.Internal.Integers
-                       Orc.Serial.Binary.Internal.Integers.Native
-                       Orc.Serial.Binary.Internal.OrcNum
-                       Orc.Serial.Binary.Internal.Put
+    Orc.Serial.Binary.Internal.Bytes
+    Orc.Serial.Binary.Internal.Compression
+    Orc.Serial.Binary.Internal.Compression.Snappy
+    Orc.Serial.Binary.Internal.Floats
+    Orc.Serial.Binary.Internal.Get
+    Orc.Serial.Binary.Internal.Integers
+    Orc.Serial.Binary.Internal.Integers.Native
+    Orc.Serial.Binary.Internal.OrcNum
+    Orc.Serial.Binary.Internal.Put
 
-                       Orc.Serial.Json.Logical
+    Orc.Serial.Json.Logical
 
-                       Orc.Serial.Protobuf.Schema
-                       Orc.Serial.Protobuf.Schema.Definitions
+    Orc.Serial.Protobuf.Schema
+    Orc.Serial.Protobuf.Schema.Definitions
 
-                       Orc.Table.Convert
-                       Orc.Table.Logical
-                       Orc.Table.Striped
+    Orc.Table.Convert
+    Orc.Table.Logical
+    Orc.Table.Striped
 
-                       Orc.X.Vector.Transpose
-                       Orc.X.Vector
-                       Orc.X.Streaming
-
-  build-depends:       base                            >= 3          && < 5
-                     , bytestring
-                     , cereal
-                     , containers
-                     , mtl
-                     , monad-control                   == 1.0.*
-                     , primitive
-                     , protobuf                        >= 0.2        && < 0.3
-                     , scientific
-                     , streaming                       >= 0.1        && < 0.3
-                     , streaming-bytestring            >= 0.1        && < 0.2
-                     , text                            >= 1.0        && < 1.3
-                     , transformers                    >= 0.4        && < 0.6
-                     , transformers-base
-                     , transformers-either
-                     , vector
-                     , wide-word
-
-                     , zlib
-                     , zstd
-
-  hs-source-dirs:      src
-  default-language:    Haskell98
-
-  include-dirs:
-                       csrc
-                       -- Snappy
-                       include
-
-
-  includes:
-                       bytes.h
-                       floats.h
-                       integers.h
-
-  c-sources:
-                       csrc/bytes.c
-                       csrc/floats.c
-                       csrc/integers.c
-
-                       -- Snappy
-                       csrc/snappy-c-raw.cc
-                       csrc/snappy-c.cc
-                       csrc/snappy-sinksource.cc
-                       csrc/snappy-stubs-internal.cc
-                       csrc/snappy.cc
-
-  cc-options:
-                       -msse4.2
-
-  extra-libraries:
-                       stdc++
-
-executable main
-  main-is:             main.hs
-
-  ghc-options:         -Wall -threaded -O2
-
-  other-modules:
-                       Paths_orc_haskell
-
-  hs-source-dirs:
-                       main
+    Orc.X.Vector.Transpose
+    Orc.X.Vector
+    Orc.X.Streaming
 
   build-depends:
-                       base                            >= 3          && < 5
-                     , orc-haskell
-                     , filepath                        >= 1.3        && < 1.5
-                     , mmorph
-                     , mtl
-                     , streaming
-                     , text
-                     , transformers
-                     , transformers-either
-                     , optparse-applicative
+      base                            >= 3          && < 5
+    , bytestring
+    , cereal
+    , containers
+    , mtl
+    , monad-control                   == 1.0.*
+    , primitive
+    , protobuf                        >= 0.2        && < 0.3
+    , scientific
+    , streaming                       >= 0.1        && < 0.3
+    , streaming-bytestring            >= 0.1        && < 0.2
+    , text                            >= 1.0        && < 1.3
+    , transformers                    >= 0.4        && < 0.6
+    , transformers-base
+    , transformers-either
+    , vector
+    , wide-word
+    , zlib
+    , zstd
+
+  hs-source-dirs:
+    src
+  default-language:
+    Haskell98
+
+  include-dirs:
+    csrc
+    -- Snappy
+    include
+
+  includes:
+    bytes.h
+    floats.h
+    integers.h
+
+  c-sources:
+    csrc/bytes.c
+    csrc/floats.c
+    csrc/integers.c
+
+    -- Snappy
+    csrc/snappy-c-raw.cc
+    csrc/snappy-c.cc
+    csrc/snappy-sinksource.cc
+    csrc/snappy-stubs-internal.cc
+    csrc/snappy.cc
+
+  cc-options:
+    -msse4.2
+
+  extra-libraries:
+    stdc++
+
+executable main
+  main-is:
+    main.hs
+
+  ghc-options:
+    -Wall -threaded -O2
+
+  other-modules:
+    Paths_orc_haskell
+
+  hs-source-dirs:
+    main
+
+  build-depends:
+      base                            >= 3          && < 5
+    , orc-haskell
+    , filepath                        >= 1.3        && < 1.5
+    , mmorph
+    , mtl
+    , streaming
+    , text
+    , transformers
+    , transformers-either
+    , optparse-applicative
 
 benchmark bench
-  type:                 exitcode-stdio-1.0
-  hs-source-dirs:       benchmarks
-  default-language:     Haskell2010
-  main-is:              bench.hs
+  type:
+    exitcode-stdio-1.0
+  hs-source-dirs:
+    benchmarks
+  default-language:
+    Haskell2010
+  main-is:
+    bench.hs
 
   ghc-options:
     -Wall -O2
 
   build-depends:
-                       base
-                     , orc-haskell
-                     , bytestring
-                     , cereal
-                     , criterion
-                     , vector
+      base
+    , orc-haskell
+    , bytestring
+    , cereal
+    , criterion
+    , vector
 
 
 test-suite test
-  type:                exitcode-stdio-1.0
+  type:
+    exitcode-stdio-1.0
 
-  main-is:             test.hs
+  main-is:
+    test.hs
 
-  ghc-options:         -Wall -threaded -O2
+  ghc-options:
+    -Wall -threaded -O2
 
   hs-source-dirs:
-                       test
+    test
 
-  other-modules:       Test.Orc.Streams.Bytes
-                       Test.Orc.Streams.Integer
-                       Test.Orc.Type
-                       Test.Orc.Logical
-                       Test.Orc.Memory.Leaks
-                       Test.Orc.Streaming
+  other-modules:
+    Test.Orc.Streams.Bytes
+    Test.Orc.Streams.Integer
+    Test.Orc.Type
+    Test.Orc.Logical
+    Test.Orc.Memory.Leaks
+    Test.Orc.Streaming
 
   build-depends:
-                       base                            >= 3          && < 5
-                     , orc-haskell
-                     , cereal
-                     , bytestring
-                     , Decimal
-                     , filepath                        >= 1.3        && < 1.5
-                     , hedgehog
-                     , hedgehog-corpus
-                     , mmorph
-                     , resourcet
-                     , streaming
-                     , streaming-bytestring
-                     , temporary-resourcet
-                     , transformers
-                     , transformers-either
-                     , vector
+      base                            >= 3          && < 5
+    , orc-haskell
+    , cereal
+    , bytestring
+    , Decimal
+    , filepath                        >= 1.3        && < 1.5
+    , hedgehog
+    , hedgehog-corpus
+    , mmorph
+    , resourcet
+    , streaming
+    , streaming-bytestring
+    , temporary-resourcet
+    , transformers
+    , transformers-either
+    , vector

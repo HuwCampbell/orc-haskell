@@ -70,7 +70,6 @@ compressionReadM = eitherReader $
     "snappy" -> Right SNAPPY
     "zlib"   -> Right ZLIB
     "zstd"   -> Right ZSTD
-    "lzo"    -> Right LZO
     "none"   -> Right NONE
     _        -> Left ("Unsupported compression kind: " <> x)
 
