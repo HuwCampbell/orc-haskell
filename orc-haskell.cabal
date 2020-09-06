@@ -15,11 +15,19 @@ maintainer:
 category:
   Codec
 build-type:
-  Simple
+  Configure
 extra-source-files:
   ChangeLog.md
 cabal-version:
   >=1.10
+
+
+extra-tmp-files:
+                       autom4te.cache
+                       config.log
+                       config.status
+                       include/config.h
+                       include/snappy-stubs-public.h
 
 library
   ghc-options:         -Wall
@@ -45,6 +53,7 @@ library
 
                        Orc.Serial.Binary.Internal.Bytes
                        Orc.Serial.Binary.Internal.Compression
+                       Orc.Serial.Binary.Internal.Compression.Snappy
                        Orc.Serial.Binary.Internal.Floats
                        Orc.Serial.Binary.Internal.Get
                        Orc.Serial.Binary.Internal.Integers
@@ -66,7 +75,6 @@ library
                        Orc.X.Streaming
 
   build-depends:       base                            >= 3          && < 5
-                     , ambiata-snapper
                      , bytestring
                      , cereal
                      , containers
@@ -92,6 +100,9 @@ library
 
   include-dirs:
                        csrc
+                       -- Snappy
+                       include
+
 
   includes:
                        bytes.h
@@ -103,11 +114,26 @@ library
                        csrc/floats.c
                        csrc/integers.c
 
+                       -- Snappy
+                       csrc/snappy-c-raw.cc
+                       csrc/snappy-c.cc
+                       csrc/snappy-sinksource.cc
+                       csrc/snappy-stubs-internal.cc
+                       csrc/snappy.cc
+
+  cc-options:
+                       -msse4.2
+
+  extra-libraries:
+                       stdc++
 
 executable main
   main-is:             main.hs
 
   ghc-options:         -Wall -threaded -O2
+
+  other-modules:
+                       Paths_orc_haskell
 
   hs-source-dirs:
                        main

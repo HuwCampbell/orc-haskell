@@ -29,10 +29,10 @@ import           Orc.Exception.Type
 import           Orc.Schema.Types as Orc
 import qualified Orc.Serial.Binary.Internal.Get as Get
 import qualified Orc.Serial.Binary.Internal.Put as Put
+import qualified Orc.Serial.Binary.Internal.Compression.Snappy as Snappy
 
 import           System.IO.Unsafe as Unsafe
 
-import qualified Snapper
 
 import qualified Codec.Compression.Zlib.Raw as Zlib
 import           Codec.Compression.Zlib.Internal (DecompressError)
@@ -96,7 +96,7 @@ readSnappyParts :: ByteString -> Either String ByteString
 readSnappyParts =
   readCompressedParts $ \pertinent ->
     note "Snappy decompression failed." $
-      Snapper.decompress pertinent
+      Snappy.decompress pertinent
 
 
 readZlibParts :: ByteString -> Either String ByteString
@@ -171,7 +171,7 @@ writeCompressedParts action =
 writeSnappyParts
   :: (MonadIO m, MonadError OrcException m)
   => Streaming.ByteString m r -> Streaming.ByteString m r
-writeSnappyParts = writeCompressedParts Snapper.compress
+writeSnappyParts = writeCompressedParts Snappy.compress
 
 writeZlibParts
   :: (MonadIO m, MonadError OrcException m)

@@ -12,6 +12,9 @@ import qualified Orc.Striped as Striped
 
 import           Options.Applicative
 
+import           Data.Version (showVersion)
+import           Paths_orc_haskell (version)
+
 import qualified Streaming.Prelude as Streaming
 
 parser :: Parser Command
@@ -34,6 +37,10 @@ data Command
 
 json :: Parser Command
 json = Json <$> strArgument (metavar "INPUT" <> help "Orc file to print as JSON")
+
+
+versioner :: Parser (a -> a)
+versioner = infoOption (showVersion version) (long "version" <> help "Show version" <> hidden)
 
 
 rewrite :: Parser Command
@@ -70,7 +77,7 @@ compressionReadM = eitherReader $
 
 main :: IO ()
 main = do
-  cmnd <- customExecParser (prefs showHelpOnEmpty) (info (parser <**> helper) idm)
+  cmnd <- customExecParser (prefs showHelpOnEmpty) (info (parser <**> helper <**> versioner) idm)
   case cmnd of
     Json orcIn ->
       Logical.printOrcFile orcIn

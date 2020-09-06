@@ -1,3 +1,0 @@
-[submodule "lib/snapper"]
-	path = lib/snapper
-	url = git@github.com:icicle-lang/snapper.git
