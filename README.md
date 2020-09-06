@@ -1,12 +1,18 @@
-Optimised Row Columnar - Haskell
-================================
+<div align="center">
 
-Orc is a native reader and writer for the apache
+# Optimised Row Columnar
+### Haskell
+
+![Haskell CI](https://github.com/HuwCampbell/orc-haskell/workflows/Haskell%20CI/badge.svg)
+
+</div>
+
+
+The project is a Haskell native reader and writer for the apache
 [ORC](https://orc.apache.org/) file format; supporting reading and
 writing all types with snappy, zlib, and zstd compression
-standards (lz4 is currently not supported).
+standards (lzo and lz4 are not currently supported).
 
-We currently read both v0 and v1, and write with v0 direct encodings.
 
 API
 ---

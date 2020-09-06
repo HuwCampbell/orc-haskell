@@ -1,4 +1,5 @@
 #include "bytes.h"
+#include <string.h>
 
 
 /* Byte Run Length Encoding
