@@ -1,73 +1,48 @@
 <div align="center">
 
-# Optimised Row Columnar
-### Haskell
+# Orc
+### Optimised Row Columnar for Haskell
 
 ![Haskell CI](https://github.com/HuwCampbell/orc-haskell/workflows/Haskell%20CI/badge.svg)
 
 </div>
 
 
-The project is a Haskell native reader and writer for the apache
+This project is a Haskell native reader and writer for the apache
 [ORC](https://orc.apache.org/) file format; supporting reading and
 writing all types with snappy, zlib, and zstd compression
 standards (lzo and lz4 are not currently supported).
+
+We have property based round-tripping tests for Orc files, and golden
+tests for the examples from the ORC specification. All files from
+the examples given in the ORC repository work, (apart from the LZO
+and LZ4 encoded ones). And large files from the tpcds benchmarks are
+able to be processed.
+
+
+License
+-------
+
+This project is currently licensed under the Affero General Public License.
+
+If you would like to use this library in a proprietary product, please
+reach out to me to discuss licencing.
 
 
 API
 ---
 
-Modules occasionally share function names, and may require qualified
-imports; for example, when streaming a file of rows from an orc
-file, one would import `Orc.Logical` as `Logical` and use
-`Logical.withOrcFile`.
-
-The API is based around the
-[streaming](http://hackage.haskell.org/package/streaming) library,
-using a with pattern for resource handling. This means one can
-stream through an ORC file, consuming it as they please, and the
-library will take care of seeking to the correct locations and
-closing its file handle when done.
-
-Here's an example to count the number of rows in a file.
-
-```haskell
-import           Control.Monad.Trans.Except (runExceptT)
-import qualified Orc.Serial.Binary.Logical as Logical
-import qualified Streaming.Prelude as Streaming
-
-Logical.withOrcFile  "decimal.orc" $ \_orcType ->
-  Streaming.length
-```
-
-While to count the number of stripes in the file, one would use
-
-```haskell
-import qualified Orc.Serial.Binary.Striped as Striped
-
-runExceptT $
-  Striped.withOrcFileLifted  "decimal.orc" $ \_orcType ->
-    Streaming.length
-```
-
-Rows and tables are strongly typed into Haskell algebraic data
-types.
-
-Error Handling
---------------
-
-One can choose to explicitly handle errors in the Orc file with
-an `ExceptT` monad transformer, or throw exceptions.
-
-The _lifted_ family of functions permit this choice to be made
-explicitly, while the unlifted functions for Logical data types
-throw exceptions.
+We have presented a layered API using a `withFile` pattern. Most users
+will want to import `Orc.Logical` and use `withOrcFile` and `putOrcFile`.
 
 
-Tests
------
+Operating Semantics
+-------------------
 
-Currently, we have property based round-tripping tests for Orc
-files, and golden tests for the examples from the ORC specification.
-All files from the examples given in the ORC repository work, (apart
-from the LZO and LZ4 encoded ones).
+One of the primary use cases for developing this library was to gather
+columnar data, which could be used as a C array. As such, we use
+`Storable.Vector` for column types, and gather entire stripes into
+memory.
+
+This is a different memory model to the C++ and Java versions, which
+seek through the files a lot more, but keep less data in memory.
