@@ -152,7 +152,8 @@ test-suite test
   hs-source-dirs:
                        test
 
-  other-modules:       Test.Orc.Streams.Bytes
+  other-modules:       Test.Orc.Data.Time
+                       Test.Orc.Streams.Bytes
                        Test.Orc.Streams.Integer
                        Test.Orc.Type
                        Test.Orc.Logical
