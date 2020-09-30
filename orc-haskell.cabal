@@ -210,6 +210,7 @@ test-suite test
     test
 
   other-modules:
+    Test.Orc.Data.Time
     Test.Orc.Streams.Bytes
     Test.Orc.Streams.Integer
     Test.Orc.Type
@@ -221,6 +222,7 @@ test-suite test
       base                            >= 3          && < 5
     , orc-haskell
     , cereal
+    , containers
     , bytestring
     , Decimal
     , filepath                        >= 1.3        && < 1.5

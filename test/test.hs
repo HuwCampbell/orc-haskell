@@ -1,5 +1,6 @@
 import           Hedgehog.Main
 
+import qualified Test.Orc.Data.Time
 import qualified Test.Orc.Streams.Bytes
 import qualified Test.Orc.Streams.Integer
 import qualified Test.Orc.Type
@@ -16,4 +17,5 @@ main =
   , Test.Orc.Logical.tests
   , Test.Orc.Streaming.tests
   , Test.Orc.Memory.Leaks.tests
+  , Test.Orc.Data.Time.tests
   ]
