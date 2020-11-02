@@ -11,7 +11,7 @@ import qualified Hedgehog.Corpus as Corpus
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
-import qualified Data.ByteString.Streaming as Streaming
+import qualified Streaming.ByteString as Streaming
 import           Streaming.Prelude as Streaming
 
 import           Orc.Prelude

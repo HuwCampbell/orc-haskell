@@ -32,14 +32,12 @@ import qualified Streaming.Prelude as Streaming
 import qualified Streaming.Internal as Streaming
 
 import qualified Data.ByteString as Strict
-import qualified Data.ByteString.Streaming as ByteStream
-import qualified Data.ByteString.Streaming.Internal as ByteStream
+import           Streaming.ByteString (ByteStream)
+import qualified Streaming.ByteString as ByteStream
+import qualified Streaming.ByteString.Internal as ByteStream
 
 import qualified Data.Vector.Generic         as Vector
 import qualified Data.Vector.Generic.Mutable as MVector
-
-type ByteStream = ByteStream.ByteString
-
 
 
 streamingLength :: Monad m => ByteStream m a -> ByteStream m (Of Word64 a)

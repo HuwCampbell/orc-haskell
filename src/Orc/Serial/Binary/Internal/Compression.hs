@@ -23,7 +23,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString.Streaming as Streaming
+import qualified Streaming.ByteString as Streaming
 
 import           Orc.Exception.Type
 import           Orc.Schema.Types as Orc
@@ -125,7 +125,7 @@ readZstdParts =
 
 writeCompressedStream
   :: (MonadIO m, MonadError OrcException m)
-  => Maybe CompressionKind -> Streaming.ByteString m r -> Streaming.ByteString m r
+  => Maybe CompressionKind -> Streaming.ByteStream m r -> Streaming.ByteStream m r
 writeCompressedStream = \case
   Nothing ->
     id
@@ -145,7 +145,7 @@ writeCompressedStream = \case
 
 writeCompressedParts
   :: (MonadIO m, MonadError OrcException m)
-  => (ByteString -> ByteString) -> Streaming.ByteString m r -> Streaming.ByteString m r
+  => (ByteString -> ByteString) -> Streaming.ByteStream m r -> Streaming.ByteStream m r
 writeCompressedParts action =
   let
     go uncompressed =
@@ -170,15 +170,15 @@ writeCompressedParts action =
 
 writeSnappyParts
   :: (MonadIO m, MonadError OrcException m)
-  => Streaming.ByteString m r -> Streaming.ByteString m r
+  => Streaming.ByteStream m r -> Streaming.ByteStream m r
 writeSnappyParts = writeCompressedParts Snapper.compress
 
 writeZlibParts
   :: (MonadIO m, MonadError OrcException m)
-  => Streaming.ByteString m r -> Streaming.ByteString m r
+  => Streaming.ByteStream m r -> Streaming.ByteStream m r
 writeZlibParts = writeCompressedParts (overLazy Zlib.compress)
 
 writeZstdParts
   :: (MonadIO m, MonadError OrcException m)
-  => Streaming.ByteString m r -> Streaming.ByteString m r
+  => Streaming.ByteStream m r -> Streaming.ByteStream m r
 writeZstdParts = writeCompressedParts (Zstd.compress Zstd.maxCLevel)

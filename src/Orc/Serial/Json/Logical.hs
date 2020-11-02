@@ -20,7 +20,7 @@ module Orc.Serial.Json.Logical (
 import           Orc.Prelude
 
 import           Control.Monad.IO.Class (MonadIO)
-import qualified Data.ByteString.Streaming as Streaming
+import qualified Streaming.ByteString as Streaming
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
@@ -39,7 +39,7 @@ import qualified Orc.Data.Time as Orc
 import           Orc.Table.Logical (Row (..))
 
 
-ppJsonRow :: MonadIO m => Row -> Streaming.ByteString m ()
+ppJsonRow :: MonadIO m => Row -> Streaming.ByteStream m ()
 ppJsonRow =
   Streaming.toStreamingByteString . (<> Builder.char8 '\n') . buildRow
 
