@@ -38,7 +38,7 @@ import           Data.Word (Word8, Word32)
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
-import qualified Data.ByteString.Streaming as ByteStream
+import qualified Streaming.ByteString as ByteStream
 
 import           Orc.Data.Segmented
 import           Orc.Data.Data (StructField (..), Indexed, currentIndex, currentValue, nextIndex, makeIndexed, prevIndex)

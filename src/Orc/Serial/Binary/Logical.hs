@@ -28,7 +28,7 @@ import           Control.Monad.Trans.Either (EitherT)
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
-import qualified Data.ByteString.Streaming as ByteStream
+import qualified Streaming.ByteString as ByteStream
 
 import           Orc.Schema.Types
 import           Orc.Serial.Binary.Base (MonadTransIO, OrcException, Raising (..))
