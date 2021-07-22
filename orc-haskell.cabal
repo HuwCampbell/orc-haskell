@@ -12,7 +12,7 @@ description:
 homepage:
   https://github.com/HuwCampbell/orc-haskell
 license:
-  AGPL-3
+  BSD3
 license-file:
   LICENSE
 author:

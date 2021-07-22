@@ -23,11 +23,8 @@ able to be processed.
 License
 -------
 
-This project is currently licensed under the Affero General Public License.
-
-If you would like to use this library in a proprietary product, please
-reach out to me to discuss licencing.
-
+This project is currently licensed permissively under the BSD 3 clause
+licence.
 
 API
 ---
