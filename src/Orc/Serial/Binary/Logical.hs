@@ -140,8 +140,8 @@ putOrcFileLifted typ mCompression chunkSize fp =
     -> Maybe CompressionKind
     -> Int
     -> FilePath
-    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) ()
-    -> EitherT OrcException IO () #-}
+    -> Streaming.Stream (Of Logical.Row) (EitherT OrcException IO) r
+    -> EitherT OrcException IO r #-}
 
 
 {-# SPECIALIZE
@@ -150,8 +150,8 @@ putOrcFileLifted typ mCompression chunkSize fp =
     -> Maybe CompressionKind
     -> Int
     -> FilePath
-    -> Streaming.Stream (Of Logical.Row) (Raising IO) ()
-    -> Raising IO () #-}
+    -> Streaming.Stream (Of Logical.Row) (Raising IO) r
+    -> Raising IO r #-}
 
 
 -- | Write a stream of values as an ORC file.
@@ -164,9 +164,9 @@ putOrcFile
   -- ^ The number of rows in each stripe
   -> FilePath
   -- ^ The filepath to write to
-  -> Streaming.Stream (Of Logical.Row) IO ()
+  -> Streaming.Stream (Of Logical.Row) IO r
   -- ^ The stream of 'Logical.Row' to write
-  -> IO ()
+  -> IO r
 putOrcFile typ mCompression chunkSize fp s =
   raisingOrcErrors $
     putOrcFileLifted typ mCompression chunkSize fp $

@@ -161,7 +161,7 @@ fromProtoTypes typs = do
   if null leftovers then
     Right typ
   else
-    Left $ "Leftovers! Coundn't parse " <> show typs <> "\n\n\nLeftovers: " <> show leftovers
+    Left $ "Leftovers! Couldn't parse " <> show typs <> "\n\n\nLeftovers: " <> show leftovers
 
     where
 
