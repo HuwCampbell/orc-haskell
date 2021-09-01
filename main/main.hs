@@ -13,7 +13,7 @@ import qualified Orc.Striped as Striped
 import           Options.Applicative
 
 import           Data.Version (showVersion)
-import           Paths_orc_haskell (version)
+import           Paths_optimised_row_columnar (version)
 
 import qualified Streaming.Prelude as Streaming
 

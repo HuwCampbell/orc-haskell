@@ -1,7 +1,7 @@
 <div align="center">
 
-# Orc
-### Optimised Row Columnar for Haskell
+# Optimised Row Columnar
+### Native Haskell Writer and Reader for ORC Files
 
 ![Haskell CI](https://github.com/HuwCampbell/orc-haskell/workflows/Haskell%20CI/badge.svg)
 
