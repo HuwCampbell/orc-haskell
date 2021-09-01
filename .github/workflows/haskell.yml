@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ghc-version: ['8.8.4', '8.10.4', '9.0.1']
+        ghc-version: ['8.4.2', '8.6.2', '8.8.4', '8.10.4', '9.0.1']
 
     steps:
     - uses: actions/checkout@v2

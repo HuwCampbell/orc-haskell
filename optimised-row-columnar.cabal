@@ -86,7 +86,7 @@ library
     Orc.X.Streaming
 
   build-depends:
-      base                            >= 3          && < 5
+      base                            >= 4.11       && < 5
     , bytestring
     , cereal
     , containers
