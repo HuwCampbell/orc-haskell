@@ -8,14 +8,16 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ghc-version: ['8.8.4', '8.10.4', '9.0.1']
 
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-haskell@v1
       with:
-        ghc-version: '8.8.2'
+        ghc-version: ${{ matrix.ghc-version }}
         cabal-version: '3.0'
 
     - name: Cache
