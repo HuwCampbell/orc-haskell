@@ -50,7 +50,7 @@ main =
       ]
 
     , bgroup "decode ints" [
-        bench "haskell" $ whnf (decodeIntegerRLEv1 @ Word32 ) intsComplex
+        bench "haskell" $ whnf (decodeIntegerRLEv1 @Word32) intsComplex
       ]
 
     , bgroup "decode bytes" [
