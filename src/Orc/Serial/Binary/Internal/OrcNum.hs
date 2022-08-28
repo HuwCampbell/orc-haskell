@@ -30,7 +30,7 @@ import           Orc.Prelude
 -- The potentially zigzag encoded natural number type is parameterised
 -- with the OrcWord associated type family.
 --
-class (Storable i, FiniteBits (OrcWord i), Integral (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
+class (Storable i, FiniteBits (OrcWord i), Integral (OrcWord i), Integral i) => OrcNum i where
   type OrcWord i :: *
   zigZag :: i -> OrcWord i
   unZigZag :: OrcWord i -> i
