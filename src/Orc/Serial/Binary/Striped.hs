@@ -592,7 +592,7 @@ putOrcStream expectedType tableStream = do
         PostScript
           (fromIntegral footerLen)
           (cmprssn <|> Just NONE)
-          Nothing
+          (262144 <$ cmprssn) -- Default in C++ but not Java.
           [0,12]
           Nothing
           (Just "ORC")
