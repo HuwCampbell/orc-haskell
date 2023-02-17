@@ -13,6 +13,7 @@ import qualified Hedgehog.Range as Range
 import           Orc.Prelude
 
 import           Orc.Data.Time
+import           Orc.Serial.Binary.Internal.Integers
 
 
 isLeapYear :: Int64 -> Bool
@@ -53,6 +54,28 @@ prop_timestamps_roundtrip =
     day   <- forAll $ Gen.integral (Range.linear 1 (maxDays year Map.! month))
     nanos <- forAll $ Gen.integral (Range.linear 0 (86400 * 1^(9::Int) - 1))
     tripping (DateTime (Date year month day) nanos) dateTimeToTimestamp (Identity . timestampToDateTime)
+
+
+-- Because the number of nanoseconds often has a large number of trailing zeros,
+-- the number has trailing decimal zero digits removed and the last three bits
+-- are used to record how many zeros were removed. if the trailing zeros are more
+-- than 2. Thus 1000 nanoseconds would be serialized as 0x0a and 100000 would be
+-- serialized as 0x0c.
+
+prop_timestamps_example_1 :: Property
+prop_timestamps_example_1 =
+  withTests 1 . property $ do
+    let encoded = encodeNanoseconds 1000
+        expected = 0x0a
+    encoded === expected
+
+
+prop_timestamps_example_2 :: Property
+prop_timestamps_example_2 =
+  withTests 1 . property $ do
+    let encoded = encodeNanoseconds 100000
+        expected = 0x0c
+    encoded === expected
 
 
 tests :: IO Bool

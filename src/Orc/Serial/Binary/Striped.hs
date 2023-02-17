@@ -38,6 +38,7 @@ import           Data.Word (Word8, Word32)
 import           Streaming (Of (..))
 import qualified Streaming as Streaming
 import qualified Streaming.Prelude as Streaming
+import           Streaming.ByteString (ByteStream)
 import qualified Streaming.ByteString as ByteStream
 
 import           Orc.Data.Segmented
@@ -62,9 +63,6 @@ import           Orc.X.Streaming
 import           System.IO as IO
 
 import           Orc.Prelude
-
-type ByteStream = ByteStream.ByteString
-
 
 withOrcFileLifted
   :: MonadTransIO t
