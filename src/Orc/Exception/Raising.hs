@@ -24,7 +24,8 @@ import           Control.Monad.Primitive (PrimMonad (..))
 
 import           Control.Exception
 import           Control.Monad.Base (MonadBase (..))
-import           Control.Monad.Except (MonadError (..), MonadTrans (..))
+import           Control.Monad.Except (MonadError (..))
+import           Control.Monad.Morph(MonadTrans(..))
 import           Control.Monad.Trans.Control (MonadBaseControl (..), MonadTransControl (..), control, defaultLiftBaseWith, defaultRestoreM)
 
 import           Orc.Exception.Type
