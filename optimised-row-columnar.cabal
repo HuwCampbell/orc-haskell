@@ -92,13 +92,14 @@ library
     , containers
     , mtl
     , monad-control                   == 1.0.*
+    , mmorph
     , primitive
     , protobuf                        >= 0.2        && < 0.3
     , scientific
-    , streaming                       >= 0.1        && < 0.3
-    , streaming-bytestring            >= 0.2        && < 0.3
-    , text                            >= 1.0        && < 1.3
-    , transformers                    >= 0.4        && < 0.6
+    , streaming                       >= 0.1        && < 0.4
+    , streaming-bytestring            >= 0.2        && < 0.4
+    , text                            >= 1.0        && < 2.2
+    , transformers                    >= 0.4        && < 0.7
     , transformers-base
     , transformers-either
     , vector
@@ -159,7 +160,7 @@ executable main
   build-depends:
       base                            >= 3          && < 5
     , optimised-row-columnar
-    , filepath                        >= 1.3        && < 1.5
+    , filepath                        >= 1.3        && < 1.6
     , mmorph
     , mtl
     , streaming
@@ -225,7 +226,7 @@ test-suite test
     , containers
     , bytestring
     , Decimal
-    , filepath                        >= 1.3        && < 1.5
+    , filepath                        >= 1.3        && < 1.6
     , hedgehog
     , hedgehog-corpus
     , mmorph
